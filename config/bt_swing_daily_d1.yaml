@@ -1,0 +1,33 @@
+# Swing Pullback — 하루 1회 거래 목표 D1 (점진 완화, 1h)
+# 목표: BTC/USDT 1h, 하루 0.3~1회 거래, 방어력 유지
+mode: backtest
+live_confirmed: false
+symbol: "BTC/USDT"
+timeframe: "1h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: swing_pullback
+  params:
+    macro_ema_period: 240     # 1h × 240 = 10일 (v2 50일 → 10일 완화)
+    st_period: 10
+    st_multiplier: 3.0
+    rsi_period: 14
+    rsi_pullback_low: 35.0    # 40 → 35
+    rsi_pullback_high: 55.0   # 45 → 55 (범위 2배 확대)
+    rsi_overbought: 70.0
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    require_volume: false     # 거래량 필터 OFF
+    vol_period: 20
+    vol_mult: 1.0
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+notifiers: [console]
