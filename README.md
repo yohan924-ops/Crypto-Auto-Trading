@@ -102,7 +102,7 @@ Crypto-Auto-Trading/
 - [x] **Phase 1** — 페이퍼 엔진 MVP (buy-and-hold, PaperBroker, Runner)
 - [x] **Phase 2** — 이동평균 교차 전략 + 백테스트
 - [x] **Phase 3** — 리스크 가드레일(손절/서킷브레이커) + 텔레그램 알림
-- [ ] **Phase 4** — Binance Testnet 실전 모드
+- [x] **Phase 4** — Binance Testnet 실전 모드 (LiveBroker + 이중 게이트)
 - [ ] **Phase 5** — RSI 전략 추가 + 다듬기
 
 ### 리스크 가드레일 & 알림
@@ -126,6 +126,56 @@ python -m tradingbot backtest --start 2024-01-01 --end 2024-07-01 \
 ```
 
 ---
+
+## 실전 모드 사용법 (Testnet 먼저!)
+
+> ⚠️ 실전(live) 모드는 실제 자산이 움직일 수 있습니다. **반드시 Testnet 에서 충분히 돌려본 뒤** 메인넷으로 전환하세요.
+
+### 1. Binance Testnet API 키 발급
+
+1. https://testnet.binance.vision/ 접속 → "Log In with GitHub" 로 로그인
+2. "Generate HMAC_SHA256 Key" 클릭 → **API Key / Secret Key** 복사
+3. 기본 가상 잔고 (≈ 1 BTC, 10,000 USDT 등) 제공됨
+4. 프로젝트의 `.env` 에 저장:
+
+```
+BINANCE_API_KEY=발급받은_키
+BINANCE_API_SECRET=발급받은_시크릿
+```
+
+### 2. 실전 모드 이중 게이트 해제
+
+`config/settings.yaml` 에서:
+
+```yaml
+live_confirmed: true          # 1차 게이트
+exchange:
+  sandbox: true               # Testnet 유지 (메인넷 전환 전 반드시 충분한 검증)
+```
+
+### 3. 실행
+
+```bash
+# Testnet 실행 (가상 자산, Binance 에서 주문 확인 가능)
+python -m tradingbot live --i-understand-real-money
+
+# 10봉만 돌려서 확인 후 종료
+python -m tradingbot live --i-understand-real-money --max-bars 10
+```
+
+두 게이트(`live_confirmed: true` + `--i-understand-real-money`) 중 하나라도 없으면 프로그램은 안전하게 거부됩니다. 실행 시 5초 안전 카운트다운 후 진입.
+
+### 4. 메인넷 전환 (숙련된 뒤 최후)
+
+```yaml
+exchange:
+  sandbox: false              # 🚨 메인넷 = 실제 자산
+```
+
+`.env` 의 키도 Binance **메인넷** 키로 교체해야 하며, 다음을 꼭 지킵니다:
+- API 키 권한에서 **"Spot Trading"만 허용**, **"Withdrawal(출금) 반드시 비활성화"**
+- `starting_cash` 를 계정 실제 잔고와 일치시키기
+- 소액으로 시작 (권장: 월 생활비의 수 %)
 
 ## 라이선스
 

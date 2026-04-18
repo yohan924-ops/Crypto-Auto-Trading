@@ -216,10 +216,138 @@ def backtest(
 
 
 @app.command()
-def live() -> None:
-    """실전 모드 (실제 자산 주문). 이중 게이트 필요."""
-    typer.echo("[live] 아직 구현되지 않음. Phase 4에서 추가 예정.")
-    raise typer.Exit(code=1)
+def live(
+    config: Path = typer.Option(
+        Path("config/settings.yaml"),
+        "--config",
+        "-c",
+        help="설정 YAML 경로",
+    ),
+    i_understand_real_money: bool = typer.Option(
+        False,
+        "--i-understand-real-money",
+        help="실제 자산 손실 가능성을 이해함을 명시적으로 확인 (이중 게이트)",
+    ),
+    max_bars: int = typer.Option(
+        0,
+        "--max-bars",
+        help="지정 시 해당 개수의 봉 처리 후 종료 (0 = 무제한)",
+    ),
+    skip_countdown: bool = typer.Option(
+        False,
+        "--skip-countdown",
+        help="5초 안전 카운트다운 건너뛰기 (테스트/운영 자동화용)",
+    ),
+) -> None:
+    """실전 모드 (실제 자산 주문). 이중 게이트 + 5초 안전 카운트다운 필수."""
+    import time
+
+    from loguru import logger
+
+    from tradingbot.broker.live import LiveBroker
+    from tradingbot.config import load_settings
+    from tradingbot.data.feed import LiveDataFeed
+    from tradingbot.engine.runner import Runner
+    from tradingbot.exchange.ccxt_adapter import CCXTAdapter
+    from tradingbot.logging_setup import setup_logging
+    from tradingbot.notifier import build_notifiers
+    from tradingbot.portfolio.portfolio import Portfolio
+    from tradingbot.portfolio.risk import RiskManager
+    from tradingbot.strategies.registry import get as get_strategy
+
+    _register_strategies()
+    setup_logging()
+    settings = load_settings(config)
+
+    # ---- 이중 게이트 ----
+    if not settings.live_confirmed:
+        typer.secho(
+            "❌ 실전 모드 거부: config/settings.yaml 의 live_confirmed 가 true 여야 합니다.",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=2)
+    if not i_understand_real_money:
+        typer.secho(
+            "❌ 실전 모드 거부: --i-understand-real-money 플래그가 필요합니다.",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=2)
+    if not settings.binance_api_key or not settings.binance_api_secret:
+        typer.secho(
+            "❌ 실전 모드 거부: .env 에 BINANCE_API_KEY / BINANCE_API_SECRET 가 필요합니다.",
+            fg=typer.colors.RED,
+            bold=True,
+        )
+        raise typer.Exit(code=2)
+
+    env_label = (
+        "TESTNET (가상 자산)"
+        if settings.exchange.sandbox
+        else "🚨 MAINNET (실제 자산) 🚨"
+    )
+    color = typer.colors.YELLOW if settings.exchange.sandbox else typer.colors.RED
+    typer.secho("╔══════════════════════════════════════════════╗", fg=color, bold=True)
+    typer.secho(f"║ 실전 모드 시작: {env_label}", fg=color, bold=True)
+    typer.secho(f"║ 거래소: {settings.exchange.id}  심볼: {settings.symbol}", fg=color)
+    typer.secho(f"║ 전략: {settings.strategy.name}  타임프레임: {settings.timeframe}", fg=color)
+    if not settings.exchange.sandbox:
+        typer.secho("║ ⚠️  실제 자산이 사용됩니다. Ctrl+C 로 취소 가능", fg=color, bold=True)
+    typer.secho("╚══════════════════════════════════════════════╝", fg=color, bold=True)
+
+    if not skip_countdown:
+        for i in range(5, 0, -1):
+            typer.echo(f"  {i}...")
+            time.sleep(1)
+
+    exchange = CCXTAdapter(
+        exchange_id=settings.exchange.id,
+        api_key=settings.binance_api_key,
+        api_secret=settings.binance_api_secret,
+        sandbox=settings.exchange.sandbox,
+    )
+
+    strategy_cls = get_strategy(settings.strategy.name)
+    strategy = strategy_cls(
+        params=settings.strategy.params,
+        symbol=settings.symbol,
+        timeframe=settings.timeframe,
+    )
+
+    portfolio = Portfolio(starting_cash=settings.starting_cash)
+    risk = RiskManager(
+        max_position_pct=settings.risk.max_position_pct,
+        stop_loss_pct=settings.risk.stop_loss_pct,
+        max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+    )
+    broker = LiveBroker(exchange=exchange)
+    notifiers = build_notifiers(
+        settings.notifiers,
+        telegram_token=settings.telegram_bot_token,
+        telegram_chat_id=settings.telegram_chat_id,
+    )
+
+    warmup = max(strategy.warmup_bars(), 5)
+    feed = LiveDataFeed(
+        exchange=exchange,
+        symbol=settings.symbol,
+        timeframe=settings.timeframe,
+        warmup_bars=warmup,
+        max_bars=max_bars if max_bars > 0 else None,
+    )
+
+    logger.info("LIVE 시작: {} {} ({})", settings.symbol, settings.timeframe, env_label)
+    runner = Runner(
+        symbol=settings.symbol,
+        strategy=strategy,
+        broker=broker,
+        portfolio=portfolio,
+        risk=risk,
+        bar_stream=feed.stream_bars(),
+        notifiers=notifiers,
+    )
+    runner.run()
 
 
 if __name__ == "__main__":

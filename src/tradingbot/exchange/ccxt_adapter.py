@@ -1,7 +1,7 @@
 """CCXT 래퍼. 모든 거래소 접근의 유일한 통로.
 
 exchange_id 만 바꾸면 Binance → Upbit 등으로 전환 가능.
-Phase 1 에서는 읽기 전용 (fetch_ohlcv / fetch_ticker) 만 사용.
+읽기(fetch_ohlcv/ticker)와 쓰기(create_order/fetch_balance) 모두 여기로.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ class CCXTAdapter:
         if sandbox and self.exchange.urls.get("test"):
             self.exchange.set_sandbox_mode(True)
 
+    # ---------- 읽기 ----------
     def fetch_ohlcv(
         self,
         symbol: str,
@@ -54,3 +55,30 @@ class CCXTAdapter:
 
     def fetch_ticker(self, symbol: str) -> dict:
         return self.exchange.fetch_ticker(symbol)
+
+    def fetch_balance(self) -> dict:
+        """전체 잔고. 반환 예: {'USDT': {'free': 1000.0, 'used': 0.0, 'total': 1000.0}, ...}"""
+        return self.exchange.fetch_balance()
+
+    # ---------- 쓰기 ----------
+    def create_order(
+        self,
+        symbol: str,
+        type: str,
+        side: str,
+        amount: float,
+        price: float | None = None,
+    ) -> dict:
+        """주문 생성. 거래소 원본 응답 dict 반환.
+
+        type: 'market' | 'limit'
+        side: 'buy' | 'sell'
+        """
+        params: dict = {}
+        return self.exchange.create_order(symbol, type, side, amount, price, params)
+
+    def cancel_order(self, order_id: str, symbol: str) -> dict:
+        return self.exchange.cancel_order(order_id, symbol)
+
+    def fetch_order(self, order_id: str, symbol: str) -> dict:
+        return self.exchange.fetch_order(order_id, symbol)
