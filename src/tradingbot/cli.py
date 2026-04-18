@@ -50,6 +50,11 @@ def paper(
         "--max-bars",
         help="지정 시 해당 개수의 봉 처리 후 종료 (0 = 무제한)",
     ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="주문을 제출하지 않고 결정 로그만 출력",
+    ),
 ) -> None:
     """페이퍼 트레이딩 모드 (실시간 시세 + 가상 잔고)."""
     # 지연 import: CLI --help 만 실행할 때 의존성 로드를 피하기 위함
@@ -61,6 +66,7 @@ def paper(
     from tradingbot.engine.runner import Runner
     from tradingbot.exchange.ccxt_adapter import CCXTAdapter
     from tradingbot.logging_setup import setup_logging
+    from tradingbot.notifier import build_notifiers
     from tradingbot.portfolio.portfolio import Portfolio
     from tradingbot.portfolio.risk import RiskManager
     from tradingbot.strategies.registry import get as get_strategy
@@ -86,8 +92,17 @@ def paper(
     )
 
     portfolio = Portfolio(starting_cash=settings.starting_cash)
-    risk = RiskManager(max_position_pct=settings.risk.max_position_pct)
+    risk = RiskManager(
+        max_position_pct=settings.risk.max_position_pct,
+        stop_loss_pct=settings.risk.stop_loss_pct,
+        max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+    )
     broker = PaperBroker(fee_bps=settings.fee_bps, slippage_bps=settings.slippage_bps)
+    notifiers = build_notifiers(
+        settings.notifiers,
+        telegram_token=settings.telegram_bot_token,
+        telegram_chat_id=settings.telegram_chat_id,
+    )
 
     warmup = max(strategy.warmup_bars(), 5)
     feed = LiveDataFeed(
@@ -105,6 +120,8 @@ def paper(
         portfolio=portfolio,
         risk=risk,
         bar_stream=feed.stream_bars(),
+        notifiers=notifiers,
+        dry_run=dry_run,
     )
     runner.run()
 
@@ -183,7 +200,11 @@ def backtest(
         starting_cash=settings.starting_cash,
         fee_bps=settings.fee_bps,
         slippage_bps=settings.slippage_bps,
-        risk=RiskManager(max_position_pct=settings.risk.max_position_pct),
+        risk=RiskManager(
+            max_position_pct=settings.risk.max_position_pct,
+            stop_loss_pct=settings.risk.stop_loss_pct,
+            max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+        ),
     )
     result = backtester.run(df)
     typer.echo(result.summary())

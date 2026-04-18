@@ -101,9 +101,18 @@ Crypto-Auto-Trading/
 - [x] **Phase 0** — 프로젝트 스캐폴딩
 - [x] **Phase 1** — 페이퍼 엔진 MVP (buy-and-hold, PaperBroker, Runner)
 - [x] **Phase 2** — 이동평균 교차 전략 + 백테스트
-- [ ] **Phase 3** — 리스크 가드레일 + 텔레그램 알림
+- [x] **Phase 3** — 리스크 가드레일(손절/서킷브레이커) + 텔레그램 알림
 - [ ] **Phase 4** — Binance Testnet 실전 모드
 - [ ] **Phase 5** — RSI 전략 추가 + 다듬기
+
+### 리스크 가드레일 & 알림
+
+- **손절**: 포지션이 `stop_loss_pct` 이상 하락하면 자동 전량 청산
+- **일일 서킷브레이커**: 하루 기준 `max_daily_loss_pct` 넘게 손실이면 당일 신규 진입 차단 (다음날 자동 해제)
+- **드라이런**: `--dry-run` 으로 실제 주문 제출 없이 결정만 로그
+- **텔레그램**: `.env` 에 `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` 설정 후
+  `config/settings.yaml` 의 `notifiers` 에 `telegram` 추가하면 신호/체결/손절/일일 리포트를 봇으로 수신
+
 
 ### 백테스트 사용 예
 
