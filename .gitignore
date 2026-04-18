@@ -24,9 +24,9 @@ build/
 .env.local
 .env.*.local
 
-# Project outputs
-logs/
-data/
+# Project outputs (root-level only — not src/tradingbot/data)
+/logs/
+/data/
 
 # IDE / OS
 .vscode/
