@@ -74,10 +74,7 @@ class Runner:
                 self._handle_day_rollover(outcome)
                 self._handle_outcome(outcome)
                 self._log_bar(outcome)
-                # 매 봉마다 전략 상태를 무조건 영속화 (Gemini 2차 검증 반영).
-                # 이벤트 트리거 방식은 `_ready = True` 같은 "신호 없는 상태 전환"
-                # 이 HOLD 로 처리돼 저장 누락되는 race 를 남긴다. 1m~4h 주기의
-                # 수십 바이트 JSON overwrite 는 성능 영향 무시 가능.
+                # 매 봉 처리가 끝날 때마다 전략 내부 상태(예: _ready 플래그) 영속화
                 self.strategy.save_state()
         finally:
             # 종료 시에도 최신 상태를 한 번 더 저장 (중간 상태 보존)

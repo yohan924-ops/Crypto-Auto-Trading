@@ -84,10 +84,14 @@ def paper(
 
     logger.info("페이퍼 모드 시작: {s} {tf}", s=settings.symbol, tf=settings.timeframe)
 
+    # paper 모드는 내부 PaperBroker 가 주문을 시뮬레이션하므로 거래소 주문 API
+    # 경로를 전혀 밟지 않는다 → API 키 불필요.
+    # 오히려 키를 넘기면 CCXT 가 public endpoint 에도 인증 헤더를 붙여
+    # "Testnet 키 × Mainnet 접속" 같은 조합에서 AuthenticationError 발생.
     exchange = CCXTAdapter(
         exchange_id=settings.exchange.id,
-        api_key=settings.exchange_api_key,
-        api_secret=settings.exchange_api_secret,
+        api_key=None,
+        api_secret=None,
         sandbox=settings.exchange.sandbox,
     )
 
@@ -116,6 +120,28 @@ def paper(
     )
 
     warmup = max(strategy.warmup_bars(), 5)
+
+    # Testnet 은 과거 데이터 제한적(약 17일). 장기 지표(예: EMA 300) warmup 을
+    # 즉시 달성하도록 Mainnet public API 에서 backfill 만 받아온다.
+    # 주문·실시간 피드는 여전히 Testnet.
+    backfill_exchange = None
+    if settings.exchange.sandbox:
+        try:
+            backfill_exchange = CCXTAdapter(
+                exchange_id=settings.exchange.id,
+                api_key=None,  # public endpoint 만 쓰므로 키 불필요
+                api_secret=None,
+                sandbox=False,  # mainnet public API
+            )
+            logger.info(
+                "backfill_exchange 활성: {} mainnet 에서 과거 봉만 받아옵니다.",
+                settings.exchange.id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "mainnet backfill_exchange 생성 실패 — Testnet 만 사용: {}", exc
+            )
+
     if settings.use_websocket and settings.exchange.id != "binance":
         logger.warning(
             "use_websocket=true 이지만 현재 거래소({})는 WebSocket 지원이 Binance 전용이라 REST 폴링으로 동작합니다.",
@@ -139,6 +165,7 @@ def paper(
             timeframe=settings.timeframe,
             warmup_bars=warmup,
             max_bars=max_bars if max_bars > 0 else None,
+            backfill_exchange=backfill_exchange,
         )
 
     runner = Runner(

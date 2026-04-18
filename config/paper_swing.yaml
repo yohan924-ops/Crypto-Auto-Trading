@@ -1,0 +1,42 @@
+# Swing Pullback v2 페이퍼 모드 (Testnet, 알림 ON)
+# 6구간 백테스트로 검증된 실전 진입 후보 전략 그대로.
+mode: paper
+live_confirmed: false
+
+symbol: "BTC/USDT"
+timeframe: "4h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+
+exchange:
+  id: binance
+  sandbox: false            # Mainnet 실시장 시세. 주문은 여전히 PaperBroker 내부 시뮬.
+
+strategy:
+  name: swing_pullback
+  params:
+    macro_ema_period: 300   # 4h × 300 = 50일 장기 추세
+    st_period: 10
+    st_multiplier: 3.0
+    rsi_period: 14
+    rsi_pullback_low: 40.0
+    rsi_pullback_high: 45.0
+    rsi_overbought: 70.0
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    require_volume: true
+    vol_period: 20
+    vol_mult: 1.0
+
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+
+notifiers:
+  - console
+  - telegram                # 매수/매도/손절/일일리포트 → 텔레그램 @KKHCryptoBot

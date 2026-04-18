@@ -51,7 +51,7 @@ notifiers: []
 
 
 @pytest.fixture
-def clean_env(monkeypatch):
+def clean_env(monkeypatch, tmp_path):
     for k in (
         "EXCHANGE_API_KEY",
         "EXCHANGE_API_SECRET",
@@ -59,6 +59,9 @@ def clean_env(monkeypatch):
         "BINANCE_API_SECRET",
     ):
         monkeypatch.delenv(k, raising=False)
+    # 프로젝트 루트의 실제 .env 가 로드돼 시나리오를 오염시키지 않도록,
+    # .env 가 없는 tmp 디렉토리로 CWD 이동. (Settings 는 CWD 의 .env 를 찾음)
+    monkeypatch.chdir(tmp_path)
     yield
 
 
