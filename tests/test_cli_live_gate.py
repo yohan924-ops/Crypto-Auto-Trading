@@ -52,7 +52,12 @@ notifiers: []
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    for k in ("BINANCE_API_KEY", "BINANCE_API_SECRET"):
+    for k in (
+        "EXCHANGE_API_KEY",
+        "EXCHANGE_API_SECRET",
+        "BINANCE_API_KEY",
+        "BINANCE_API_SECRET",
+    ):
         monkeypatch.delenv(k, raising=False)
     yield
 
@@ -87,7 +92,7 @@ def test_live_rejected_when_api_key_missing(tmp_path, clean_env):
         ],
     )
     assert result.exit_code == 2
-    assert "BINANCE_API_KEY" in _combined(result)
+    assert "EXCHANGE_API_KEY" in _combined(result)
 
 
 def test_live_help_works():

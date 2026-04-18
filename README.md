@@ -158,9 +158,11 @@ python -m tradingbot backtest --start 2024-01-01 --end 2024-07-01 \
 4. 프로젝트의 `.env` 에 저장:
 
 ```
-BINANCE_API_KEY=발급받은_키
-BINANCE_API_SECRET=발급받은_시크릿
+EXCHANGE_API_KEY=발급받은_키
+EXCHANGE_API_SECRET=발급받은_시크릿
 ```
+
+> 키 이름은 **거래소 공통**입니다. 나중에 Upbit 으로 전환 시 동일한 변수에 Upbit 키를 넣으면 됩니다.
 
 ### 2. 실전 모드 이중 게이트 해제
 
@@ -195,6 +197,32 @@ exchange:
 - API 키 권한에서 **"Spot Trading"만 허용**, **"Withdrawal(출금) 반드시 비활성화"**
 - `starting_cash` 를 계정 실제 잔고와 일치시키기
 - 소액으로 시작 (권장: 월 생활비의 수 %)
+
+### Upbit 으로 전환하기
+
+엔진·전략·브로커·러너 **코드는 한 줄도 수정하지 않음**. 설정 3곳만:
+
+1. `.env` — 같은 변수 이름에 Upbit 키 저장
+   ```
+   EXCHANGE_API_KEY=Upbit_Access_Key
+   EXCHANGE_API_SECRET=Upbit_Secret_Key
+   ```
+   (Upbit 키 발급 시 **자산 조회 / 주문 조회·생성·취소**만 허용, **출금 비활성화**, IP 화이트리스트 권장)
+
+2. `config/settings.yaml` — 거래소·심볼·샌드박스 설정
+   ```yaml
+   symbol: "BTC/KRW"     # USDT → KRW (원화 직접거래)
+   exchange:
+     id: upbit
+     sandbox: false      # Upbit 은 테스트넷 없음
+   ```
+
+3. 실행:
+   ```bash
+   python -m tradingbot paper --max-bars 10
+   ```
+
+공식 Upbit CCXT 가이드: https://docs.upbit.com/kr/docs/ccxt-library-guide
 
 ## 트러블슈팅
 

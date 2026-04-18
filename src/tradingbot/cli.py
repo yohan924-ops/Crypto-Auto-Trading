@@ -80,8 +80,8 @@ def paper(
 
     exchange = CCXTAdapter(
         exchange_id=settings.exchange.id,
-        api_key=settings.binance_api_key,
-        api_secret=settings.binance_api_secret,
+        api_key=settings.exchange_api_key,
+        api_secret=settings.exchange_api_secret,
         sandbox=settings.exchange.sandbox,
     )
 
@@ -171,8 +171,8 @@ def backtest(
 
     exchange = CCXTAdapter(
         exchange_id=settings.exchange.id,
-        api_key=settings.binance_api_key,
-        api_secret=settings.binance_api_secret,
+        api_key=settings.exchange_api_key,
+        api_secret=settings.exchange_api_secret,
         sandbox=settings.exchange.sandbox,
     )
 
@@ -275,9 +275,9 @@ def live(
             bold=True,
         )
         raise typer.Exit(code=2)
-    if not settings.binance_api_key or not settings.binance_api_secret:
+    if not settings.exchange_api_key or not settings.exchange_api_secret:
         typer.secho(
-            "❌ 실전 모드 거부: .env 에 BINANCE_API_KEY / BINANCE_API_SECRET 가 필요합니다.",
+            "❌ 실전 모드 거부: .env 에 EXCHANGE_API_KEY / EXCHANGE_API_SECRET 가 필요합니다.",
             fg=typer.colors.RED,
             bold=True,
         )
@@ -304,8 +304,8 @@ def live(
 
     exchange = CCXTAdapter(
         exchange_id=settings.exchange.id,
-        api_key=settings.binance_api_key,
-        api_secret=settings.binance_api_secret,
+        api_key=settings.exchange_api_key,
+        api_secret=settings.exchange_api_secret,
         sandbox=settings.exchange.sandbox,
     )
 

@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     risk: RiskCfg = Field(default_factory=RiskCfg)
     notifiers: list[str] = Field(default_factory=lambda: ["console"])
 
-    # 시크릿 (.env 에서 로드)
-    binance_api_key: str | None = None
-    binance_api_secret: str | None = None
+    # 시크릿 (.env 에서 로드) — 거래소 공통 (Binance/Upbit 모두 이 키를 사용)
+    exchange_api_key: str | None = None
+    exchange_api_secret: str | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
 
