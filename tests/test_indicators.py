@@ -1,4 +1,4 @@
-"""지표 테스트 (SMA / EMA / RSI)."""
+"""지표 테스트 (SMA / EMA / RSI / Bollinger / ATR)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tradingbot.utils.indicators import ema, rsi, sma
+from tradingbot.utils.indicators import atr, bollinger_bands, ema, rsi, sma
 
 
 def test_sma_basic():
@@ -77,3 +77,50 @@ def test_rsi_warmup_nan():
 def test_rsi_invalid_period():
     with pytest.raises(ValueError):
         rsi(pd.Series([1.0, 2.0]), period=0)
+
+
+# ------- Bollinger -------
+
+
+def test_bollinger_middle_equals_sma():
+    s = pd.Series(np.linspace(1, 100, 50))
+    middle, upper, lower = bollinger_bands(s, period=20, num_std=2.0)
+    # middle 은 SMA 와 동일
+    assert middle.iloc[-1] == pytest.approx(sma(s, 20).iloc[-1])
+    # upper > middle > lower 항상 성립
+    assert upper.iloc[-1] > middle.iloc[-1] > lower.iloc[-1]
+
+
+def test_bollinger_constant_series_has_zero_width():
+    # 모든 값이 같으면 std=0 → upper == middle == lower
+    s = pd.Series([10.0] * 30)
+    middle, upper, lower = bollinger_bands(s, period=10, num_std=2.0)
+    assert upper.iloc[-1] == pytest.approx(middle.iloc[-1])
+    assert lower.iloc[-1] == pytest.approx(middle.iloc[-1])
+
+
+def test_bollinger_invalid_params():
+    s = pd.Series([1.0, 2.0])
+    with pytest.raises(ValueError):
+        bollinger_bands(s, period=0)
+    with pytest.raises(ValueError):
+        bollinger_bands(s, period=10, num_std=0.0)
+
+
+# ------- ATR -------
+
+
+def test_atr_positive_for_ranging_market():
+    # 등락이 있으면 ATR > 0
+    high = pd.Series([10.0, 12.0, 11.0, 13.0, 14.0, 12.0] * 5)
+    low = pd.Series([9.0, 10.0, 9.5, 11.0, 12.0, 10.0] * 5)
+    close = pd.Series([9.5, 11.0, 10.0, 12.0, 13.0, 11.0] * 5)
+    result = atr(high, low, close, period=14).dropna()
+    assert (result > 0).all()
+
+
+def test_atr_zero_for_flat_market():
+    flat = pd.Series([100.0] * 30)
+    result = atr(flat, flat, flat, period=14).dropna()
+    # 가격 변동 없으면 ATR 은 0
+    assert result.iloc[-1] == pytest.approx(0.0, abs=1e-9)

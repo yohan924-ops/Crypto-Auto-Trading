@@ -18,9 +18,11 @@ app = typer.Typer(
 def _register_strategies() -> None:
     """레지스트리에 내장 전략들을 등록하기 위한 side-effect import."""
     from tradingbot.strategies import (
+        bollinger_breakout,  # noqa: F401
         buy_and_hold,  # noqa: F401
         ma_crossover,  # noqa: F401
         rsi_reversal,  # noqa: F401
+        volatility_breakout,  # noqa: F401
     )
 
 
