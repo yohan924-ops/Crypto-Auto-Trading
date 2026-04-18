@@ -9,6 +9,75 @@
 
 ---
 
+## 0-A. 🎯 현재 선정된 운용 전략 (ACTIVE STRATEGY)
+
+**다른 AI 가 이 저장소를 열었을 때 가장 먼저 읽어야 하는 섹션.** 지금 이 프로젝트에서 실전·페이퍼 운용 후보로 **확정된 전략은 단 하나**:
+
+### 🏆 Swing Pullback v2 (Gemini 제안 + 거래량 필터 튜닝)
+
+| 항목 | 값 |
+|---|---|
+| 전략 이름 | `swing_pullback` |
+| 전략 소스 | [`src/tradingbot/strategies/swing_pullback.py`](src/tradingbot/strategies/swing_pullback.py) |
+| 백테스트 설정 | [`config/bt_swing_pullback_v2.yaml`](config/bt_swing_pullback_v2.yaml) |
+| **타임프레임** | **4h** |
+| 심볼 (검증) | BTC/USDT |
+
+### 논리 회로 (상태 머신)
+
+```text
+[1단계 거시 필터]  close > EMA(300)         ← 하락장 차단 (4h × 300 = 50일 ≈ 1D EMA50 근사)
+[2단계 눌림 포착]  RSI(14) ∈ [40, 45]       ← ready = True (상승장 pullback 감지)
+[3단계 진입 확인]  Supertrend(10, 3) = UP
+                 AND MACD(12,26,9) 히스토그램 음→양 전환
+                 AND volume > volume_ma(20)
+→ 모두 ✅ 이고 ready=True 이면 BUY
+
+[청산 규칙 (전략 내부)]
+- Supertrend 상→하 전환 → SELL (동적 손절)
+- RSI(14) ≥ 70 → SELL (과매수 익절)
+
+[청산 규칙 (RiskManager 외부 방어선)]
+- stop_loss_pct: 0.08     (진입가 대비 -8%)
+- trailing_activate_pct: 0.10  (+10% 수익권 도달 후 활성)
+- trailing_stop_pct: 0.05      (피크 대비 -5% 하락 시 청산)
+- max_daily_loss_pct: 0.10
+- max_position_pct: 0.30
+```
+
+### 선정 근거 (백테스트 6구간 × 3.5년)
+
+| 구간 | 수익률 | 거래 | MDD |
+|---|---|---|---|
+| 2022 H2 (하락장 🔥) | **+1.40%** | 4 | 0.12% |
+| 2023 H1 (완만 상승) | +1.01% | 2 | 0.05% |
+| 2024 H1 (박스권) | -0.92% | 6 | 1.90% |
+| 2024 H2 (강한 추세) | **+2.93%** | 6 | 0.88% |
+| 2025 H1 | **+2.15%** | 4 | 1.00% |
+| 2025 H2 | 0% (거래 0회) | 0 | 0% |
+| **복리 누적** | **+6.72%** | — | 최악 -0.92% |
+
+**핵심 의사결정**: 같은 기간 rsi_reversal 은 2022 H2 하락장에 -2.78% 로 무너짐. swing_pullback 만 **하락장에서도 + 수익** 냄.
+
+### 기각된 대안 (절대 되돌리지 말 것)
+
+| 전략 | 기각 이유 |
+|---|---|
+| `rsi_reversal` | 하락장(2022 H2) -2.78% 치명적. 추세 필터 없음 |
+| `rsi_reversal_v2` | EMA200 필터 추가했지만 기회 너무 줄어 평균 -0.23% |
+| `triple_screen` | 조건 4개 AND "상태 유지" 방식 — 수수료 누적으로 6구간 평균 -1.24% |
+| `pullback` | EMA(120) 1h 너무 엄격, 기회 부족. 3구간 평균 -0.17% |
+| `swing_pullback` v3/v4/v5 튜닝안 | RSI 범위↓, Supertrend mult↑, 거래량 임계↑ — **전부 v2 대비 개선 없거나 악화** |
+| 2봇 병행 (swing + rsi) | 50:50 단순 평균 시 rsi 하락장 손실이 swing 수익을 깎음 → 평균 +0.43% (swing 단독 +1.11% 보다 낮음) |
+
+### 실전 전개 순서
+
+1. **Testnet 페이퍼 72봉 이상 관찰** (4h × 72 = 12일 권장) — `paper_swing.yaml` 로 (미생성 시 `bt_swing_pullback_v2.yaml` 의 `sandbox: false` 를 `true` 로, `mode: paper` 로 변경 복사)
+2. **Upbit BTC/KRW 실전 소액** (25만원, max_position_pct 는 실전 시 0.10 으로 축소 권장)
+3. 1~2개월 안정 후 다른 코인(ETH 등) 에 동일 전략 확장 고려 — **단일 자산 2봇은 "가짜 분산" 이니 금지**
+
+---
+
 ## 1. 프로젝트가 무엇이고 무엇이 아닌가
 
 ### 이것이다
@@ -79,26 +148,37 @@
 | 6C | `ca81fd1` | 멀티 자산 백테스트 (`portfolio:` 설정) |
 | 6D | `37eb55a` | Streamlit 웹 대시보드 (`tradingbot dashboard`) |
 | 6E | `c05cbce` | Binance WebSocket 실시간 피드 (`use_websocket: true`) |
+| Security | `24e6e79` | 실전 진입 전 취약점·버그 14건 일괄 수정 (ENV 오버라이드 차단, clientOrderId, 트레일링 인프라 등) |
+| Strategy | `b069ae8` | MACD/Volume MA/Supertrend 지표 + triple_screen/pullback/swing_pullback/rsi_reversal_v2 전략 + 6구간 튜닝 실험 (swing_pullback_v2 확정) |
 
 ---
 
-## 5. 내장 전략 5종
+## 5. 내장 전략 9종
 
-| 이름 | 타입 | 언제 쓰는가 |
-|---|---|---|
-| `buy_and_hold` | 검증용 | 엔드투엔드 파이프라인 테스트 전용 |
-| `ma_crossover` | 추세 추종 | 장기 트렌드 시장. Default `fast=20, slow=50` |
-| `rsi_reversal` | 모멘텀 역추세 | 박스권·횡보장. Default `period=14, oversold=30, overbought=70` |
-| `bollinger_breakout` | 변동성 추종 | 변동성 확장기. 현재 바 제외한 밴드 기준 상·하단 돌파 |
-| `volatility_breakout` | 데일리 추세 | **한국 커뮤니티 검증 다수, 일봉 BTC/KRW 기본 추천** |
+| 이름 | 타입 | 상태 | 언제 쓰는가 |
+| --- | --- | --- | --- |
+| `buy_and_hold` | 검증용 | 유지 | 엔드투엔드 파이프라인 테스트 전용 |
+| `ma_crossover` | 추세 추종 | 유지 | 장기 트렌드 시장. Default `fast=20, slow=50` |
+| `rsi_reversal` | 모멘텀 역추세 | **기각** | 하락장 취약 (2022 H2 -2.78%) — §0-A 참고 |
+| `rsi_reversal_v2` | + EMA200 필터 | 실험 | 하락장 방어됐지만 기회 부족 — 평균 -0.23% |
+| `bollinger_breakout` | 변동성 추종 | 유지 | 변동성 확장기. 현재 바 제외한 밴드 기준 돌파 |
+| `volatility_breakout` | 데일리 추세 | 유지 | 래리 윌리엄스 변동성 돌파 (1일봉 권장) |
+| `triple_screen` | 4조건 AND | **기각** | 수수료 누적으로 평균 -1.24% — §0-A 참고 |
+| `pullback` | Gemini v1 | **기각** | 1h 기준 기회 부족 — 평균 -0.17% |
+| **`swing_pullback`** | **Gemini v2 스윙** | **🎯 활성 후보** | **§0-A 참고, 6구간 복리 +6.72%** |
 
-### 첫 실전 진입 추천 전략
-**`volatility_breakout` (K=0.5) on Upbit `BTC/KRW` `1d`**
+### 첫 실전 진입 추천 전략 (2026-04 업데이트)
+
+**`swing_pullback` v2 on `BTC/USDT` `4h`** — 파라미터는 [`config/bt_swing_pullback_v2.yaml`](config/bt_swing_pullback_v2.yaml)
 
 이유:
-- 한국 퀀트 커뮤니티 10년+ 검증
-- 1일 1회 체결 → 버그 노출 기회 최소
-- 로직 3줄로 설명 가능 (사용자가 완전히 이해 가능)
+
+- 6구간 3.5년 백테스트 **유일하게 하락장·상승장·박스권 모두 양수 또는 손실 최소**
+- Supertrend + MACD + RSI + Volume MA 4축 교차 검증 — "왜 샀는지" 완전 설명 가능
+- 거래 빈도 반년당 4~6회 — 스윙 스타일, 심리·관찰 부담 최소
+- 트레일링 스탑 병렬 운용으로 큰 추세 수익 자동 극대화
+
+> **과거 권장**(volatility_breakout 1d Upbit/KRW) 은 백테스트 6구간 평균 -0.25% 로 **재검증 결과 기각**.
 
 ---
 
