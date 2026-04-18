@@ -1,4 +1,4 @@
-"""지표 테스트 (SMA / EMA)."""
+"""지표 테스트 (SMA / EMA / RSI)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tradingbot.utils.indicators import ema, sma
+from tradingbot.utils.indicators import ema, rsi, sma
 
 
 def test_sma_basic():
@@ -41,3 +41,39 @@ def test_ema_reacts_faster_than_sma():
     m = sma(s, period=5).iloc[-1]
     # EMA 가 최근 값 20 에 SMA 보다 가까움
     assert abs(e - 20.0) < abs(m - 20.0)
+
+
+# ------- RSI -------
+
+
+def test_rsi_range_is_0_to_100():
+    s = pd.Series(np.linspace(100, 200, 50) + np.random.RandomState(0).normal(0, 1, 50))
+    r = rsi(s, period=14).dropna()
+    assert (r >= 0).all()
+    assert (r <= 100).all()
+
+
+def test_rsi_pure_uptrend_is_100():
+    # 계속 상승만 하면 모든 loss 가 0, RSI 가 100 에 수렴
+    s = pd.Series(np.arange(1.0, 50.0))
+    r = rsi(s, period=14).dropna()
+    assert r.iloc[-1] == pytest.approx(100.0)
+
+
+def test_rsi_pure_downtrend_is_0():
+    # 계속 하락만 하면 RSI 가 0 에 수렴
+    s = pd.Series(np.arange(50.0, 1.0, -1.0))
+    r = rsi(s, period=14).dropna()
+    assert r.iloc[-1] == pytest.approx(0.0)
+
+
+def test_rsi_warmup_nan():
+    s = pd.Series([100.0] * 10)
+    r = rsi(s, period=14)
+    # 길이 10 < period 14 → 모두 NaN
+    assert r.isna().all()
+
+
+def test_rsi_invalid_period():
+    with pytest.raises(ValueError):
+        rsi(pd.Series([1.0, 2.0]), period=0)

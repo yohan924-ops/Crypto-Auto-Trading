@@ -1,0 +1,10 @@
+# RSI 역추세 전략 파라미터 (참고용).
+# 실제로는 settings.yaml 의 strategy 섹션이 우선 사용됨.
+#
+# 사용 예: settings.yaml 에 아래를 넣으면 전략만 교체되고
+# 엔진/브로커/러너 코드는 한 줄도 수정되지 않는다 (플러그인 구조).
+name: rsi_reversal
+params:
+  period: 14       # RSI 계산 기간
+  oversold: 30     # 이 값 아래로 내려가면 매수 신호
+  overbought: 70   # 이 값 위로 올라가면 매도 신호

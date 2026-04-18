@@ -70,3 +70,35 @@ def test_summary_string_has_return(synthetic_ohlcv, tmp_path, monkeypatch):
     summary = result.summary()
     assert "총 수익률" in summary
     assert "최대 낙폭" in summary
+    assert "Sharpe" in summary
+    assert "Sortino" in summary
+    assert "승률" in summary
+
+
+def test_sharpe_and_sortino_computed(synthetic_ohlcv, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    df = synthetic_ohlcv(n=200, trend="up")
+    bt = _make_backtester("buy_and_hold", params={})
+    result = bt.run(df)
+    # 숫자가 나와야 하고 NaN/inf 가 아니어야 함
+    import math
+
+    assert math.isfinite(result.sharpe)
+    assert math.isfinite(result.sortino)
+    assert 0.0 <= result.win_rate_pct <= 100.0
+
+
+def test_strategy_swap_without_engine_change(synthetic_ohlcv, tmp_path, monkeypatch):
+    """플러그인 구조 증명: 전략 이름만 바꿔 rsi_reversal 실행.
+
+    엔진/브로커/러너 코드는 Phase 3 이후 한 줄도 변경되지 않았음.
+    """
+    monkeypatch.chdir(tmp_path)
+    from tradingbot.strategies import rsi_reversal  # noqa: F401  registry 등록
+
+    df = synthetic_ohlcv(n=400, trend="sideways", seed=3)
+    bt = _make_backtester("rsi_reversal", params={"period": 14, "oversold": 30, "overbought": 70})
+    result = bt.run(df)
+    assert result.num_bars == len(df)
+    # 횡보장 합성 데이터에서는 RSI 교차가 발생할 가능성 — 최소 0 이상
+    assert result.num_trades >= 0

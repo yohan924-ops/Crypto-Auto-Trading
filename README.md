@@ -103,7 +103,26 @@ Crypto-Auto-Trading/
 - [x] **Phase 2** — 이동평균 교차 전략 + 백테스트
 - [x] **Phase 3** — 리스크 가드레일(손절/서킷브레이커) + 텔레그램 알림
 - [x] **Phase 4** — Binance Testnet 실전 모드 (LiveBroker + 이중 게이트)
-- [ ] **Phase 5** — RSI 전략 추가 + 다듬기
+- [x] **Phase 5** — RSI 전략 추가 + Sharpe/Sortino/승률 + CI
+
+### 전략 교체
+
+엔진/브로커/러너 코드 **수정 없이** 설정만 바꿔 전략 교체 가능:
+
+```yaml
+# config/settings.yaml
+strategy:
+  name: rsi_reversal
+  params:
+    period: 14
+    oversold: 30
+    overbought: 70
+```
+
+내장 전략:
+- `buy_and_hold` — 첫 봉 매수 후 홀드 (엔드투엔드 검증용)
+- `ma_crossover` — 단·장기 이평선 골든/데드 크로스
+- `rsi_reversal` — RSI 과매수/과매도 반전
 
 ### 리스크 가드레일 & 알림
 
@@ -176,6 +195,21 @@ exchange:
 - API 키 권한에서 **"Spot Trading"만 허용**, **"Withdrawal(출금) 반드시 비활성화"**
 - `starting_cash` 를 계정 실제 잔고와 일치시키기
 - 소액으로 시작 (권장: 월 생활비의 수 %)
+
+## 트러블슈팅
+
+| 증상 | 원인 / 해결 |
+|---|---|
+| `NetworkError: binance GET ...` | 방화벽/VPN 문제. 브라우저에서 해당 호스트(testnet.binance.vision 등)에 먼저 접속 확인. 회사망이라면 프록시 필요할 수도 |
+| `AuthenticationError: Invalid API-key` | `.env` 에 키 오타, 권한 누락, Testnet 키를 Mainnet 에 쓰거나 반대 |
+| `InsufficientFunds` | Testnet 은 GitHub 로 다시 로그인하면 잔고 리셋되는 경우 있음 |
+| `InvalidNonce` / `Timestamp for this request is outside of the recvWindow` | 시스템 시간이 Binance 서버와 어긋남. NTP 동기화: `sudo ntpdate time.google.com` (Linux) 또는 Windows 인터넷 시간 동기화 |
+| `BadSymbol: BTC/USDT` | 거래소별 표기 주의. Binance `BTC/USDT`, Upbit `BTC/KRW` |
+| `Rate limit exceeded` | `enableRateLimit=true` 는 기본 적용됨. 타임프레임을 더 큰 값으로(`1m`→`5m`), 폴링 간격 늘리기 |
+| 봉이 한참 안 나타남 | `1h` 타임프레임은 정각마다 새 봉. 빠르게 확인하려면 `timeframe: "1m"` 사용 |
+| 백테스트 결과가 "너무 좋음" | 오버피팅 의심. 다른 구간/심볼에서도 검증. 수수료·슬리피지 키워서 재검증 |
+| Sharpe 가 음수 | 변동성 대비 평균 수익이 음수 — 해당 구간에서 전략이 손실 누적임을 의미 |
+| logs/orders.jsonl 파일 계속 커짐 | 프로젝트 용도상 append-only. 필요 시 주기적 로테이션은 Phase 5 이후 개선 |
 
 ## 라이선스
 

@@ -2,21 +2,78 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 import pandas as pd
 from loguru import logger
 
-from tradingbot.broker.base import Fill
+from tradingbot.broker.base import Fill, OrderSide
 from tradingbot.broker.paper import PaperBroker
 from tradingbot.data.feed import bar_from_row
 from tradingbot.logging_setup import log_order_event
 from tradingbot.portfolio.portfolio import Portfolio
 from tradingbot.portfolio.risk import RiskManager
 from tradingbot.strategies.base import Strategy
+from tradingbot.utils.timeframes import timeframe_to_seconds
 
 from .core import HISTORY_COLUMNS, append_bar, process_bar
+
+_SECONDS_PER_YEAR = 365 * 24 * 3600
+
+
+def _annualization_factor(timeframe: str) -> float:
+    """바 단위 수익률을 연율화하기 위한 sqrt 계수.
+
+    crypto 는 24/7 거래라 달력일 기준으로 계산.
+    """
+    return math.sqrt(_SECONDS_PER_YEAR / timeframe_to_seconds(timeframe))
+
+
+def _sharpe(returns: pd.Series, factor: float) -> float:
+    if returns.empty:
+        return 0.0
+    std = returns.std()
+    if not std or math.isnan(std):
+        return 0.0
+    return float(returns.mean() / std * factor)
+
+
+def _sortino(returns: pd.Series, factor: float) -> float:
+    if returns.empty:
+        return 0.0
+    downside = returns[returns < 0]
+    if downside.empty:
+        return 0.0
+    std = downside.std()
+    if not std or math.isnan(std):
+        return 0.0
+    return float(returns.mean() / std * factor)
+
+
+def _win_rate(trades: list[Fill]) -> float:
+    """페어링된 BUY→SELL 사이클 기준 승률 (%).
+
+    간단한 FIFO 매칭: SELL 발생 시 직전 BUY 와 비교하여 수익/손실 판정.
+    """
+    buys: list[Fill] = []
+    wins = 0
+    total = 0
+    for f in trades:
+        if f.side == OrderSide.BUY:
+            buys.append(f)
+            continue
+        # SELL: 가장 오래된 BUY 와 매칭 (amount 부분은 단순화하여 가중 미포함)
+        if not buys:
+            continue
+        entry = buys.pop(0)
+        total += 1
+        if f.price > entry.price:
+            wins += 1
+    if total == 0:
+        return 0.0
+    return wins / total * 100.0
 
 
 @dataclass
@@ -29,6 +86,9 @@ class BacktestResult:
     ending_equity: float
     total_return_pct: float
     max_drawdown_pct: float
+    sharpe: float
+    sortino: float
+    win_rate_pct: float
     num_trades: int
     num_bars: int
     equity_curve: pd.DataFrame = field(repr=False)
@@ -44,7 +104,9 @@ class BacktestResult:
             f"최종 자산:   {self.ending_equity:,.2f}",
             f"총 수익률:   {self.total_return_pct:+.2f}%",
             f"최대 낙폭:   {self.max_drawdown_pct:.2f}%",
-            f"거래 횟수:   {self.num_trades}",
+            f"Sharpe:      {self.sharpe:+.2f} (연율화)",
+            f"Sortino:     {self.sortino:+.2f} (연율화)",
+            f"거래 횟수:   {self.num_trades}  (승률 {self.win_rate_pct:.1f}%)",
             "========================",
         ]
         return "\n".join(lines)
@@ -108,7 +170,9 @@ class Backtester:
 
         equity_curve = pd.DataFrame(equity_rows)
         ending_equity = (
-            equity_curve["equity"].iloc[-1] if not equity_curve.empty else self.starting_cash
+            equity_curve["equity"].iloc[-1]
+            if not equity_curve.empty
+            else self.starting_cash
         )
 
         if not equity_curve.empty:
@@ -119,6 +183,14 @@ class Backtester:
             mdd = 0.0
 
         total_return_pct = (ending_equity / self.starting_cash - 1) * 100.0
+
+        # 연율화 지표
+        bar_returns = equity_curve["equity"].pct_change().dropna() if not equity_curve.empty else pd.Series(dtype=float)
+        ann = _annualization_factor(self.timeframe)
+        sharpe = _sharpe(bar_returns, ann)
+        sortino = _sortino(bar_returns, ann)
+        win_rate = _win_rate(trades)
+
         start_ts = df["timestamp"].iloc[0]
         end_ts = df["timestamp"].iloc[-1]
 
@@ -131,14 +203,18 @@ class Backtester:
             ending_equity=ending_equity,
             total_return_pct=total_return_pct,
             max_drawdown_pct=abs(mdd),
+            sharpe=sharpe,
+            sortino=sortino,
+            win_rate_pct=win_rate,
             num_trades=len(trades),
             num_bars=len(equity_curve),
             equity_curve=equity_curve,
             trades=trades,
         )
         logger.info(
-            "백테스트 완료: return={:+.2f}% trades={} mdd={:.2f}%",
+            "백테스트 완료: return={:+.2f}% sharpe={:+.2f} trades={} mdd={:.2f}%",
             result.total_return_pct,
+            result.sharpe,
             result.num_trades,
             result.max_drawdown_pct,
         )

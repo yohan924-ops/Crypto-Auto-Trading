@@ -20,6 +20,7 @@ def _register_strategies() -> None:
     from tradingbot.strategies import (
         buy_and_hold,  # noqa: F401
         ma_crossover,  # noqa: F401
+        rsi_reversal,  # noqa: F401
     )
 
 
