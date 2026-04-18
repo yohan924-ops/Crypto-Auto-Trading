@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     starting_cash: float = 10_000.0
     fee_bps: float = 10.0
     slippage_bps: float = 5.0
+    use_websocket: bool = False  # paper/live 에서 REST 폴링 대신 WS 피드 사용
 
     exchange: ExchangeCfg = Field(default_factory=ExchangeCfg)
     strategy: StrategyCfg = Field(default_factory=StrategyCfg)

@@ -108,13 +108,25 @@ def paper(
     )
 
     warmup = max(strategy.warmup_bars(), 5)
-    feed = LiveDataFeed(
-        exchange=exchange,
-        symbol=settings.symbol,
-        timeframe=settings.timeframe,
-        warmup_bars=warmup,
-        max_bars=max_bars if max_bars > 0 else None,
-    )
+    if settings.use_websocket and settings.exchange.id == "binance":
+        from tradingbot.data.ws_feed import BinanceWebSocketFeed
+
+        feed = BinanceWebSocketFeed(
+            symbol=settings.symbol,
+            timeframe=settings.timeframe,
+            sandbox=settings.exchange.sandbox,
+            warmup_bars=warmup,
+            max_bars=max_bars if max_bars > 0 else None,
+            backfill_exchange=exchange,
+        )
+    else:
+        feed = LiveDataFeed(
+            exchange=exchange,
+            symbol=settings.symbol,
+            timeframe=settings.timeframe,
+            warmup_bars=warmup,
+            max_bars=max_bars if max_bars > 0 else None,
+        )
 
     runner = Runner(
         symbol=settings.symbol,

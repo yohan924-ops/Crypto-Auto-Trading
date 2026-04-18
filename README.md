@@ -123,6 +123,18 @@ strategy:
 - `buy_and_hold` — 첫 봉 매수 후 홀드 (엔드투엔드 검증용)
 - `ma_crossover` — 단·장기 이평선 골든/데드 크로스
 - `rsi_reversal` — RSI 과매수/과매도 반전
+- `bollinger_breakout` — 볼린저 밴드 상·하단 돌파
+- `volatility_breakout` — 래리 윌리엄스 변동성 돌파 (1일봉 권장)
+
+### 추가 기능
+
+- **HTML 리포트** — `--save-report report.html` 로 백테스트 결과를
+  Plotly 차트 포함된 단일 HTML 파일로 저장 (에쿼티 곡선+드로우다운 + 월별 히트맵 + 거래 내역)
+- **멀티 자산 백테스트** — `settings.yaml` 에 `portfolio:` 리스트를 두면
+  여러 심볼을 동시에 백테스트 (공유 포트폴리오·리스크). 예: `config/portfolio_example.yaml`
+- **웹 대시보드** — `python -m tradingbot dashboard` 로 브라우저에서 `logs/orders.jsonl` 실시간 시각화
+- **WebSocket 피드** — `settings.yaml` 에 `use_websocket: true` 추가 시 Binance WebSocket 으로
+  봉 종료 즉시 push 수신 (REST 폴링 대신). 지연 10초 → 수십 ms.
 
 ### 리스크 가드레일 & 알림
 
