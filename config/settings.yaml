@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------
+# Crypto Auto-Trading Bot - 기본 설정
+# ---------------------------------------------------------------
+# 모드: paper (기본) | backtest | live
+# - paper: 실시간 시세 + 가상 잔고 (실제 주문 X)
+# - backtest: 과거 데이터로 전략 시뮬레이션
+# - live: 실제 자산 주문 (live_confirmed: true 필수)
+mode: paper
+
+# 실전 전환 이중 게이트 (live 모드 사용 시 반드시 CLI 플래그도 필요)
+live_confirmed: false
+
+# 거래 설정
+symbol: "BTC/USDT"
+timeframe: "1h"
+starting_cash: 10000.0    # 페이퍼/백테스트 시작 자금 (USDT)
+fee_bps: 10.0             # 수수료 0.10% (Binance 기본)
+slippage_bps: 5.0         # 슬리피지 0.05%
+
+# 거래소
+exchange:
+  id: binance
+  sandbox: true           # Binance Testnet 사용 (학습 단계 기본값)
+
+# 전략 (Phase 2 이후 사용)
+strategy:
+  name: ma_crossover
+  params:
+    fast: 20
+    slow: 50
+
+# 리스크 관리 (Phase 3 이후 사용)
+risk:
+  max_position_pct: 0.10  # 최대 포지션 크기 (자산의 10%)
+  stop_loss_pct: 0.05     # 손절 -5%
+  max_daily_loss_pct: 0.05  # 일일 손실 한도 -5% (도달 시 당일 거래 중단)
+
+# 알림 채널 (Phase 3 이후 사용)
+notifiers:
+  - console
+  # - telegram   # .env에 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 설정 후 주석 해제
