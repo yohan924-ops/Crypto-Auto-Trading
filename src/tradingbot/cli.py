@@ -144,6 +144,11 @@ def backtest(
         "--save-curve",
         help="에쿼티 커브 CSV 저장 경로 (지정 시만 저장)",
     ),
+    save_report: Path | None = typer.Option(
+        None,
+        "--save-report",
+        help="Plotly HTML 리포트 저장 경로 (지정 시 차트 포함)",
+    ),
 ) -> None:
     """백테스트 모드 (과거 OHLCV 데이터로 전략 시뮬레이션)."""
     from loguru import logger
@@ -216,6 +221,12 @@ def backtest(
         save_curve.parent.mkdir(parents=True, exist_ok=True)
         result.equity_curve.to_csv(save_curve, index=False)
         typer.echo(f"에쿼티 커브 저장: {save_curve}")
+
+    if save_report is not None:
+        from tradingbot.reports import render_html_report
+
+        render_html_report(result, settings.strategy.name, save_report)
+        typer.echo(f"HTML 리포트 저장: {save_report}")
 
 
 @app.command()
