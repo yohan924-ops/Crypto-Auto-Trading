@@ -1,0 +1,26 @@
+# 데모용 — buy_and_hold 로 첫 봉 즉시 매수. 대시보드 체결 마커 확인용.
+# 이 설정은 "학습" 이 아니라 "파이프라인 시각 확인" 이 목적.
+mode: paper
+live_confirmed: false
+
+symbol: "BTC/USDT"
+timeframe: "1m"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+
+exchange:
+  id: binance
+  sandbox: true
+
+strategy:
+  name: buy_and_hold
+  params: {}
+
+risk:
+  max_position_pct: 0.10
+  stop_loss_pct: 0.05
+  max_daily_loss_pct: 0.05
+
+notifiers:
+  - console

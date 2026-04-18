@@ -1,0 +1,30 @@
+# Gemini v2 스윙 전략 — 4h 단일 TF 근사.
+# 거시 추세 필터는 4h × 300 = 50일 EMA 로 1D EMA(50) 수학적 동등 근사.
+mode: backtest
+live_confirmed: false
+symbol: "BTC/USDT"
+timeframe: "4h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: swing_pullback
+  params:
+    macro_ema_period: 300    # 4h × 300 = 50일 추세 (1D EMA50 근사)
+    st_period: 10
+    st_multiplier: 3.0
+    rsi_period: 14
+    rsi_pullback_low: 40.0   # Gemini 권장 "Bull bias"
+    rsi_pullback_high: 45.0
+    rsi_overbought: 70.0
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+risk:
+  max_position_pct: 0.30     # 스윙은 매매 드물어 포지션 더 크게
+  stop_loss_pct: 0.08        # Supertrend 이탈이 주 청산, 이건 보조
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05    # 피크 대비 -5%
+  trailing_activate_pct: 0.10  # +10% 수익권 진입 후 활성
+notifiers: [console]

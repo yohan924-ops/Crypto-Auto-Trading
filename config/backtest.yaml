@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------
+# 백테스트 전용 설정 — 과거 OHLCV 를 Binance MAINNET 공개 API 로 조회.
+# 공개 API 라 API 키/주문 불필요. 실전 거래 설정(settings.yaml) 과 분리.
+# ---------------------------------------------------------------
+mode: backtest
+live_confirmed: false
+
+symbol: "BTC/USDT"
+timeframe: "1h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+
+exchange:
+  id: binance
+  sandbox: false          # 과거 데이터 조회 목적 — 메인넷 public API
+
+strategy:
+  name: ma_crossover
+  params:
+    fast: 20
+    slow: 50
+
+risk:
+  max_position_pct: 0.10
+  stop_loss_pct: 0.05
+  max_daily_loss_pct: 0.05
+
+notifiers:
+  - console

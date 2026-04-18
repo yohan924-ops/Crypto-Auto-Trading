@@ -1,0 +1,31 @@
+mode: backtest
+live_confirmed: false
+symbol: "BTC/USDT"
+timeframe: "1h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: pullback
+  params:
+    ema_period: 120         # 1h * 120 = 5일 장기 추세 필터
+    rsi_period: 14
+    rsi_oversold: 30.0
+    rsi_overbought: 70.0
+    use_bb_lower: true
+    bb_period: 20
+    bb_num_std: 2.0
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    require_volume: true
+    vol_period: 20
+    vol_mult: 1.0
+risk:
+  max_position_pct: 0.10
+  stop_loss_pct: 0.03       # Gemini 권장 -3%
+  max_daily_loss_pct: 0.05
+  trailing_stop_pct: 0.02   # 피크 대비 -2%
+  trailing_activate_pct: 0.05  # +5% 수익권 진입 후 활성
+notifiers: [console]

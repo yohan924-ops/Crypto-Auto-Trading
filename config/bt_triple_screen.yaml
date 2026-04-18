@@ -1,0 +1,21 @@
+mode: backtest
+live_confirmed: false
+symbol: "BTC/USDT"
+timeframe: "1h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: triple_screen
+  params:
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    rsi_period: 14
+    rsi_low: 40.0
+    rsi_high: 70.0
+    bb_period: 20
+    vol_period: 20
+risk: {max_position_pct: 0.10, stop_loss_pct: 0.05, max_daily_loss_pct: 0.05}
+notifiers: [console]

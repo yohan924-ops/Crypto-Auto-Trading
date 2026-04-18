@@ -35,6 +35,12 @@ class RiskCfg(BaseModel):
     max_position_pct: float = 0.10
     stop_loss_pct: float = 0.05
     max_daily_loss_pct: float = 0.05
+    # 트레일링 스탑: 포지션 평가 최고점 대비 하락률이 이 값 이상이면 강제 청산.
+    # 기본값 0.0 = 비활성 (기존 전략 동작 호환). 활성화 예: 0.02 = 최고점 대비 -2%.
+    trailing_stop_pct: float = 0.0
+    # 트레일링은 "수익권 진입" 후에만 작동. 활성화 임계: 평균진입가 대비 +pct.
+    # 매수 직후 횡보에서 트레일링이 일반 손절보다 먼저 트리거되는 것을 방지.
+    trailing_activate_pct: float = 0.05
 
 
 class Settings(BaseSettings):

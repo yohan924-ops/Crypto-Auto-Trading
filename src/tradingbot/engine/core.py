@@ -127,9 +127,10 @@ def process_bar(
     if len(history) < strategy.warmup_bars():
         return _snapshot(bar, None, None, None, portfolio, symbol, marks, day_rolled_over=day_rolled)
 
-    # 3) 손절 체크 (포지션 있을 때만). 봉 내 저가 터치 포함.
+    # 3) 손절/트레일링 체크 (포지션 있을 때만). 봉 내 저가 터치 포함.
     position = portfolio.get_position(symbol)
-    if risk.check_stop_loss(position, bar.close, low_price=bar.low):
+    risk.update_peak(symbol, bar.high, position.amount)
+    if risk.check_stop_loss(position, bar.close, low_price=bar.low, symbol=symbol):
         forced_signal = Signal(
             type=SignalType.SELL,
             symbol=symbol,

@@ -28,12 +28,16 @@ class RiskManager:
     max_position_pct: float = 0.10
     stop_loss_pct: float = 0.05
     max_daily_loss_pct: float = 0.05
+    trailing_stop_pct: float = 0.0  # 0 = 비활성
+    trailing_activate_pct: float = 0.05
     state_path: Path | None = None  # 지정 시 halt/일일 자산을 이 파일에 영속화
 
     # 내부 상태 (일자별 리셋)
     _current_day: date | None = field(default=None, repr=False)
     _day_start_equity: float | None = field(default=None, repr=False)
     _halted: bool = field(default=False, repr=False)
+    # 심볼별 포지션 평가 최고가 (트레일링 스탑용). 프로세스 메모리에만 유지.
+    _position_peaks: dict[str, float] = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if self.state_path is not None:
@@ -103,25 +107,52 @@ class RiskManager:
             return max(position_amount, 0.0)
         return 0.0
 
+    def update_peak(self, symbol: str, high_price: float, position_amount: float) -> None:
+        """포지션 평가 최고가 추적. 포지션 없으면 기록 삭제."""
+        if position_amount <= 0:
+            self._position_peaks.pop(symbol, None)
+            return
+        if high_price <= 0:
+            return
+        current = self._position_peaks.get(symbol)
+        self._position_peaks[symbol] = high_price if current is None else max(current, high_price)
+
     def check_stop_loss(
         self,
         position: Position,
         current_price: float,
         low_price: float | None = None,
+        symbol: str | None = None,
     ) -> bool:
-        """보유 포지션이 손절선(-stop_loss_pct) 이하로 내려갔는지 여부.
+        """손절 또는 트레일링 스탑 트리거 여부.
 
-        ``low_price`` 가 제공되면 봉 내 저가도 함께 검사한다. close 만 보면
-        "장중에 손절선 찍고 반등" 한 경우를 놓치므로, 가장 불리한 가격
-        (= min(current, low)) 을 기준으로 판단한다.
+        세 가지 축을 함께 검사한다 — 하나라도 해당되면 True:
+          1) 평균진입가 기준 손절: (current|low) / avg - 1 <= -stop_loss_pct
+          2) 트레일링 스탑: 피크까지 trailing_activate_pct 이상 상승했던 포지션이
+             피크 대비 trailing_stop_pct 이상 하락한 경우
+        low_price 가 주어지면 봉 내 저가도 "가장 불리한 가격" 으로 반영.
         """
         if position.amount <= 0 or position.avg_price <= 0 or current_price <= 0:
             return False
-        worst_price = current_price
+        worst = current_price
         if low_price is not None and low_price > 0:
-            worst_price = min(worst_price, low_price)
-        pnl_pct = (worst_price - position.avg_price) / position.avg_price
-        return pnl_pct <= -self.stop_loss_pct
+            worst = min(worst, low_price)
+
+        # 1) 고정 손절
+        avg_pnl = (worst - position.avg_price) / position.avg_price
+        if avg_pnl <= -self.stop_loss_pct:
+            return True
+
+        # 2) 트레일링 — activate 임계 통과한 경우에만
+        if symbol is not None and self.trailing_stop_pct > 0:
+            peak = self._position_peaks.get(symbol)
+            if peak is not None and peak > 0:
+                peak_gain = (peak - position.avg_price) / position.avg_price
+                if peak_gain >= self.trailing_activate_pct:
+                    peak_pnl = (worst - peak) / peak
+                    if peak_pnl <= -self.trailing_stop_pct:
+                        return True
+        return False
 
     def update_day(self, now: datetime, equity: float) -> bool:
         """일자 경계를 관리. 날짜가 바뀌면 True 반환하고 상태 리셋.

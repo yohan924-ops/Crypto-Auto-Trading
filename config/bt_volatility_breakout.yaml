@@ -1,0 +1,13 @@
+mode: backtest
+live_confirmed: false
+symbol: "BTC/USDT"
+timeframe: "1d"          # 변동성 돌파는 일봉 권장
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: volatility_breakout
+  params: {k: 0.5}
+risk: {max_position_pct: 0.10, stop_loss_pct: 0.05, max_daily_loss_pct: 0.05}
+notifiers: [console]

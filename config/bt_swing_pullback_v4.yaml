@@ -1,0 +1,32 @@
+# v4 — Supertrend multiplier 3 → 4 (노이즈 강화 필터). 나머지는 v2 동일.
+mode: backtest
+live_confirmed: false
+symbol: "BTC/USDT"
+timeframe: "4h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: swing_pullback
+  params:
+    macro_ema_period: 300
+    st_period: 10
+    st_multiplier: 4.0           # v2 대비 유일 변경 (3.0 → 4.0)
+    rsi_period: 14
+    rsi_pullback_low: 40.0
+    rsi_pullback_high: 45.0
+    rsi_overbought: 70.0
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    require_volume: true
+    vol_period: 20
+    vol_mult: 1.0
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+notifiers: [console]

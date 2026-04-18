@@ -21,7 +21,11 @@ def _register_strategies() -> None:
         bollinger_breakout,  # noqa: F401
         buy_and_hold,  # noqa: F401
         ma_crossover,  # noqa: F401
+        pullback,  # noqa: F401
         rsi_reversal,  # noqa: F401
+        rsi_reversal_v2,  # noqa: F401
+        swing_pullback,  # noqa: F401
+        triple_screen,  # noqa: F401
         volatility_breakout,  # noqa: F401
     )
 
@@ -99,6 +103,8 @@ def paper(
         max_position_pct=settings.risk.max_position_pct,
         stop_loss_pct=settings.risk.stop_loss_pct,
         max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+        trailing_stop_pct=settings.risk.trailing_stop_pct,
+        trailing_activate_pct=settings.risk.trailing_activate_pct,
         state_path=Path("logs/risk_state_paper.json"),
     )
     broker = PaperBroker(fee_bps=settings.fee_bps, slippage_bps=settings.slippage_bps)
@@ -196,6 +202,8 @@ def backtest(
         max_position_pct=settings.risk.max_position_pct,
         stop_loss_pct=settings.risk.stop_loss_pct,
         max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+        trailing_stop_pct=settings.risk.trailing_stop_pct,
+        trailing_activate_pct=settings.risk.trailing_activate_pct,
     )
 
     # 멀티 자산 포트폴리오 모드 감지
@@ -411,6 +419,8 @@ def live(
         max_position_pct=settings.risk.max_position_pct,
         stop_loss_pct=settings.risk.stop_loss_pct,
         max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+        trailing_stop_pct=settings.risk.trailing_stop_pct,
+        trailing_activate_pct=settings.risk.trailing_activate_pct,
         state_path=Path("logs/risk_state_live.json"),
     )
     broker = LiveBroker(exchange=exchange)
@@ -455,10 +465,14 @@ def dashboard(
 ) -> None:
     """Streamlit 기반 웹 대시보드를 실행 (logs/orders.jsonl 시각화)."""
     import subprocess
+    import sys
     from importlib.resources import files
 
     app_path = str(files("tradingbot.dashboard").joinpath("app.py"))
+    # 'streamlit' 실행 파일이 PATH 에 없을 수 있으므로 현재 파이썬의 -m 로 호출.
     args = [
+        sys.executable,
+        "-m",
         "streamlit",
         "run",
         app_path,

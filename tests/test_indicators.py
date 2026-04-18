@@ -6,7 +6,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tradingbot.utils.indicators import atr, bollinger_bands, ema, rsi, sma
+from tradingbot.utils.indicators import (
+    atr,
+    bollinger_bands,
+    ema,
+    macd,
+    rsi,
+    sma,
+    supertrend,
+    volume_ma,
+)
 
 
 def test_sma_basic():
@@ -124,3 +133,86 @@ def test_atr_zero_for_flat_market():
     result = atr(flat, flat, flat, period=14).dropna()
     # 가격 변동 없으면 ATR 은 0
     assert result.iloc[-1] == pytest.approx(0.0, abs=1e-9)
+
+
+# ------- MACD -------
+
+
+def test_macd_histogram_positive_on_uptrend():
+    # 꾸준한 상승: EMA(12) > EMA(26) → macd_line > 0 → 히스토그램 양수로 수렴
+    s = pd.Series(np.linspace(100.0, 200.0, 100))
+    line, sig, hist = macd(s)
+    assert line.iloc[-1] > 0
+    assert hist.iloc[-1] > 0
+
+
+def test_macd_histogram_negative_on_downtrend():
+    s = pd.Series(np.linspace(200.0, 100.0, 100))
+    line, _, hist = macd(s)
+    assert line.iloc[-1] < 0
+    assert hist.iloc[-1] < 0
+
+
+def test_macd_warmup_nan():
+    # slow=26 + signal=9 = 34 봉 이하에서는 signal/hist 가 NaN
+    s = pd.Series(np.arange(1.0, 20.0))
+    _, sig, hist = macd(s)
+    assert sig.isna().all()
+    assert hist.isna().all()
+
+
+def test_macd_rejects_invalid_params():
+    s = pd.Series([1.0, 2.0, 3.0])
+    with pytest.raises(ValueError):
+        macd(s, fast=0)
+    with pytest.raises(ValueError):
+        macd(s, fast=20, slow=10)  # fast >= slow
+
+
+# ------- Volume MA -------
+
+
+def test_volume_ma_matches_simple_mean():
+    v = pd.Series([10.0, 20.0, 30.0, 40.0, 50.0])
+    result = volume_ma(v, period=3)
+    assert np.isnan(result.iloc[1])
+    assert result.iloc[2] == pytest.approx(20.0)
+    assert result.iloc[4] == pytest.approx(40.0)
+
+
+def test_volume_ma_invalid_period():
+    with pytest.raises(ValueError):
+        volume_ma(pd.Series([1.0]), period=0)
+
+
+# ------- Supertrend -------
+
+
+def test_supertrend_follows_uptrend():
+    # 꾸준한 상승 → trend 최종값 +1
+    high = pd.Series(np.linspace(101.0, 201.0, 80))
+    low = pd.Series(np.linspace(99.0, 199.0, 80))
+    close = pd.Series(np.linspace(100.0, 200.0, 80))
+    trend, line = supertrend(high, low, close, period=10, multiplier=3.0)
+    # 최종 상태는 상승 추세
+    assert trend.iloc[-1] == 1
+    # 상승 추세일 때 line 은 lower band (종가 아래)
+    assert line.iloc[-1] < close.iloc[-1]
+
+
+def test_supertrend_follows_downtrend():
+    high = pd.Series(np.linspace(201.0, 101.0, 80))
+    low = pd.Series(np.linspace(199.0, 99.0, 80))
+    close = pd.Series(np.linspace(200.0, 100.0, 80))
+    trend, line = supertrend(high, low, close, period=10, multiplier=3.0)
+    assert trend.iloc[-1] == -1
+    # 하락 추세일 때 line 은 upper band (종가 위)
+    assert line.iloc[-1] > close.iloc[-1]
+
+
+def test_supertrend_invalid_params():
+    s = pd.Series([1.0, 2.0, 3.0])
+    with pytest.raises(ValueError):
+        supertrend(s, s, s, period=0)
+    with pytest.raises(ValueError):
+        supertrend(s, s, s, multiplier=0)
