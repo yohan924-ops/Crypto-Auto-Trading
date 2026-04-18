@@ -423,5 +423,30 @@ def live(
     runner.run()
 
 
+@app.command()
+def dashboard(
+    port: int = typer.Option(8501, "--port", "-p", help="Streamlit 서버 포트"),
+    headless: bool = typer.Option(
+        True, "--headless/--open-browser", help="브라우저 자동 실행 여부"
+    ),
+) -> None:
+    """Streamlit 기반 웹 대시보드를 실행 (logs/orders.jsonl 시각화)."""
+    import subprocess
+    from importlib.resources import files
+
+    app_path = str(files("tradingbot.dashboard").joinpath("app.py"))
+    args = [
+        "streamlit",
+        "run",
+        app_path,
+        "--server.port",
+        str(port),
+    ]
+    if headless:
+        args += ["--server.headless", "true"]
+    typer.echo(f"대시보드 실행: http://localhost:{port}")
+    subprocess.run(args, check=False)
+
+
 if __name__ == "__main__":
     app()
