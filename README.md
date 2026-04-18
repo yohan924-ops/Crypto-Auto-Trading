@@ -99,11 +99,22 @@ Crypto-Auto-Trading/
 ## 진행 상황
 
 - [x] **Phase 0** — 프로젝트 스캐폴딩
-- [ ] **Phase 1** — 페이퍼 엔진 MVP
-- [ ] **Phase 2** — 이동평균 교차 전략 + 백테스트
+- [x] **Phase 1** — 페이퍼 엔진 MVP (buy-and-hold, PaperBroker, Runner)
+- [x] **Phase 2** — 이동평균 교차 전략 + 백테스트
 - [ ] **Phase 3** — 리스크 가드레일 + 텔레그램 알림
 - [ ] **Phase 4** — Binance Testnet 실전 모드
 - [ ] **Phase 5** — RSI 전략 추가 + 다듬기
+
+### 백테스트 사용 예
+
+```bash
+# BTC/USDT 1h, 2024년 상반기, MA(20/50) 크로스 전략
+python -m tradingbot backtest --start 2024-01-01 --end 2024-07-01
+
+# 에쿼티 커브까지 CSV 저장
+python -m tradingbot backtest --start 2024-01-01 --end 2024-07-01 \
+    --save-curve logs/equity.csv
+```
 
 ---
 

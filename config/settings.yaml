@@ -22,16 +22,13 @@ exchange:
   id: binance
   sandbox: true           # Binance Testnet 사용 (학습 단계 기본값)
 
-# 전략
-# Phase 1 은 buy_and_hold 만 제공. Phase 2 에서 ma_crossover 추가되면
-# 아래 주석을 교체하여 사용.
+# 전략 (Phase 2 기본: ma_crossover. 다른 전략으로 바꾸려면 name 만 변경)
+# 사용 가능: buy_and_hold, ma_crossover (Phase 5에서 rsi_reversal 추가 예정)
 strategy:
-  name: buy_and_hold
-  params: {}
-  # name: ma_crossover
-  # params:
-  #   fast: 20
-  #   slow: 50
+  name: ma_crossover
+  params:
+    fast: 20
+    slow: 50
 
 # 리스크 관리 (Phase 3 이후 사용)
 risk:

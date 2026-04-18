@@ -1,0 +1,6 @@
+# MA Crossover 전략 파라미터 (참고용 단일 파일 버전).
+# 실제로는 settings.yaml 의 strategy 섹션이 우선 사용됨.
+name: ma_crossover
+params:
+  fast: 20   # 단기 이동평균 기간
+  slow: 50   # 장기 이동평균 기간
