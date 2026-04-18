@@ -1,0 +1,35 @@
+# 멀티 자산 포트폴리오 예시 설정.
+#
+# 사용법: settings.yaml 의 최상단에 아래 'portfolio' 섹션을 추가하면
+# 백테스트 시 단일 자산(symbol 필드) 대신 여러 심볼을 동시에 시뮬레이션.
+# 각 심볼마다 별도 전략·파라미터·비중(weight) 지정 가능.
+#
+# 실행 예:
+#   python -m tradingbot backtest --config config/settings.yaml \
+#       --start 2024-01-01 --end 2024-07-01
+#
+# 주의:
+#   - weight 는 심볼별 포지션 크기 배수. weight=1.0 에서 해당 심볼은
+#     max_position_pct * 1.0 * equity 만큼 매수. weight 합이 1.0 이상이면
+#     총 배분이 max_position_pct 의 합을 초과할 수 있음 (사용자 책임).
+#   - 포트폴리오 수준의 stop_loss / 일일 손실 서킷브레이커는 공용 RiskManager
+#     가 관리하므로 전체 자산 대비로 판정됨.
+
+portfolio:
+  - symbol: "BTC/USDT"
+    strategy:
+      name: ma_crossover
+      params: {fast: 20, slow: 50}
+    weight: 0.5
+
+  - symbol: "ETH/USDT"
+    strategy:
+      name: rsi_reversal
+      params: {period: 14, oversold: 30, overbought: 70}
+    weight: 0.3
+
+  - symbol: "SOL/USDT"
+    strategy:
+      name: bollinger_breakout
+      params: {period: 20, num_std: 2.0}
+    weight: 0.2

@@ -167,6 +167,76 @@ def backtest(
     start_dt = _parse_date(start)
     end_dt = _parse_date(end)
 
+    exchange = CCXTAdapter(
+        exchange_id=settings.exchange.id,
+        api_key=settings.exchange_api_key,
+        api_secret=settings.exchange_api_secret,
+        sandbox=settings.exchange.sandbox,
+    )
+
+    risk = RiskManager(
+        max_position_pct=settings.risk.max_position_pct,
+        stop_loss_pct=settings.risk.stop_loss_pct,
+        max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+    )
+
+    # 멀티 자산 포트폴리오 모드 감지
+    if settings.portfolio:
+        from tradingbot.engine.multi_backtester import (
+            MultiAssetBacktester,
+            PortfolioItem,
+        )
+
+        logger.info(
+            "멀티 자산 백테스트: {n}개 심볼 {tf} {start}~{end}",
+            n=len(settings.portfolio),
+            tf=settings.timeframe,
+            start=start_dt.date(),
+            end=end_dt.date(),
+        )
+        items: list[PortfolioItem] = []
+        for p in settings.portfolio:
+            df_sym = fetch_historical(
+                exchange=exchange,
+                symbol=p.symbol,
+                timeframe=settings.timeframe,
+                start=start_dt,
+                end=end_dt,
+            )
+            if df_sym.empty:
+                typer.echo(f"{p.symbol} 과거 데이터 없음. 스킵.")
+                continue
+            strat_cls = get_strategy(p.strategy.name)
+            strat = strat_cls(
+                params=p.strategy.params,
+                symbol=p.symbol,
+                timeframe=settings.timeframe,
+            )
+            items.append(PortfolioItem(symbol=p.symbol, strategy=strat, weight=p.weight, df=df_sym))
+
+        if not items:
+            typer.echo("유효한 심볼이 없습니다.")
+            raise typer.Exit(code=1)
+
+        mbt = MultiAssetBacktester(
+            items=items,
+            timeframe=settings.timeframe,
+            starting_cash=settings.starting_cash,
+            fee_bps=settings.fee_bps,
+            slippage_bps=settings.slippage_bps,
+            risk=risk,
+        )
+        result = mbt.run()
+        typer.echo(result.summary())
+        if save_curve is not None:
+            save_curve.parent.mkdir(parents=True, exist_ok=True)
+            result.equity_curve.to_csv(save_curve, index=False)
+            typer.echo(f"에쿼티 커브 저장: {save_curve}")
+        if save_report is not None:
+            typer.echo("멀티 자산 HTML 리포트는 아직 미지원 (단일 자산 모드에서만 사용 가능).")
+        return
+
+    # 단일 자산 모드 (legacy)
     logger.info(
         "백테스트 시작: {s} {tf} {start}~{end} 전략={strat}",
         s=settings.symbol,
@@ -174,13 +244,6 @@ def backtest(
         start=start_dt.date(),
         end=end_dt.date(),
         strat=settings.strategy.name,
-    )
-
-    exchange = CCXTAdapter(
-        exchange_id=settings.exchange.id,
-        api_key=settings.exchange_api_key,
-        api_secret=settings.exchange_api_secret,
-        sandbox=settings.exchange.sandbox,
     )
 
     df = fetch_historical(
@@ -208,11 +271,7 @@ def backtest(
         starting_cash=settings.starting_cash,
         fee_bps=settings.fee_bps,
         slippage_bps=settings.slippage_bps,
-        risk=RiskManager(
-            max_position_pct=settings.risk.max_position_pct,
-            stop_loss_pct=settings.risk.stop_loss_pct,
-            max_daily_loss_pct=settings.risk.max_daily_loss_pct,
-        ),
+        risk=risk,
     )
     result = backtester.run(df)
     typer.echo(result.summary())

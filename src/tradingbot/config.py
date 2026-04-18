@@ -23,6 +23,14 @@ class StrategyCfg(BaseModel):
     params: dict = Field(default_factory=dict)
 
 
+class PortfolioItemCfg(BaseModel):
+    """멀티 자산 포트폴리오의 각 항목."""
+
+    symbol: str
+    strategy: StrategyCfg
+    weight: float = 1.0
+
+
 class RiskCfg(BaseModel):
     max_position_pct: float = 0.10
     stop_loss_pct: float = 0.05
@@ -52,6 +60,7 @@ class Settings(BaseSettings):
 
     exchange: ExchangeCfg = Field(default_factory=ExchangeCfg)
     strategy: StrategyCfg = Field(default_factory=StrategyCfg)
+    portfolio: list[PortfolioItemCfg] | None = None  # 설정 시 멀티 자산 모드
     risk: RiskCfg = Field(default_factory=RiskCfg)
     notifiers: list[str] = Field(default_factory=lambda: ["console"])
 

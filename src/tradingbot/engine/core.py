@@ -57,10 +57,9 @@ def append_bar(history: pd.DataFrame, bar: Bar) -> None:
     }
 
 
-def _snapshot(bar, signal, order, fill, portfolio, symbol, **flags) -> BarOutcome:
-    marks = {symbol: bar.close}
+def _snapshot(bar, signal, order, fill, portfolio, symbol, marks, **flags) -> BarOutcome:
     pos_amount = portfolio.get_position(symbol).amount
-    equity = portfolio.equity(marks) if pos_amount > 0 else portfolio.cash
+    equity = portfolio.equity(marks) if portfolio.positions else portfolio.cash
     return BarOutcome(
         bar=bar,
         signal=signal,
@@ -109,12 +108,16 @@ def process_bar(
     portfolio: Portfolio,
     risk: RiskManager,
     dry_run: bool = False,
+    weight: float = 1.0,
+    extra_marks: dict[str, float] | None = None,
 ) -> BarOutcome:
     """새 바 하나를 파이프라인에 통과시키고 결과 스냅샷 반환.
 
     ``history`` 는 호출 전 현재 바가 이미 포함되어 있어야 함.
+    ``extra_marks`` 는 멀티 자산 모드에서 다른 심볼들의 최근 종가 (equity 계산용).
     """
-    marks = {symbol: bar.close}
+    marks: dict[str, float] = dict(extra_marks or {})
+    marks[symbol] = bar.close
 
     # 1) 일자 전환 감지 (해당 시점 자산 기준으로 day-start equity 기록)
     current_equity = portfolio.equity(marks) if portfolio.positions else portfolio.cash
@@ -122,7 +125,7 @@ def process_bar(
 
     # 2) 워밍업 미완: 포지션 관리만, 신호 생성 X
     if len(history) < strategy.warmup_bars():
-        return _snapshot(bar, None, None, None, portfolio, symbol, day_rolled_over=day_rolled)
+        return _snapshot(bar, None, None, None, portfolio, symbol, marks, day_rolled_over=day_rolled)
 
     # 3) 손절 체크 (포지션 있을 때만)
     position = portfolio.get_position(symbol)
@@ -144,6 +147,7 @@ def process_bar(
             fill,
             portfolio,
             symbol,
+            marks,
             rejected_reason=rejected,
             stop_loss_triggered=True,
             day_rolled_over=day_rolled,
@@ -160,6 +164,7 @@ def process_bar(
             None,
             portfolio,
             symbol,
+            marks,
             circuit_breaker_triggered=True,
             day_rolled_over=day_rolled,
         )
@@ -171,6 +176,7 @@ def process_bar(
         equity=current_equity,
         price=bar.close,
         position_amount=position_amount,
+        weight=weight,
     )
 
     order: Order | None = None
@@ -191,6 +197,7 @@ def process_bar(
         fill,
         portfolio,
         symbol,
+        marks,
         rejected_reason=rejected,
         day_rolled_over=day_rolled,
         dry_run=dry_run,

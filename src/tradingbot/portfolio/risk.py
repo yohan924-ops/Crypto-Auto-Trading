@@ -31,19 +31,22 @@ class RiskManager:
         equity: float,
         price: float,
         position_amount: float,
+        weight: float = 1.0,
     ) -> float:
         """주문 수량 결정. 0 반환 시 주문 스킵.
 
-        - BUY: 이미 포지션 보유 중이면 0, 아니면 max_position_pct 만큼 매수
+        - BUY: 이미 포지션 보유 중이면 0, 아니면 max_position_pct*weight 만큼 매수
         - SELL: 보유 수량 전체 청산
         - HOLD: 0
+
+        ``weight`` 는 멀티 자산 포트폴리오에서 심볼별 할당 비중. 단일 자산은 1.0.
         """
         if signal.type == SignalType.BUY:
             if position_amount > 0:
                 return 0.0
-            if price <= 0 or equity <= 0:
+            if price <= 0 or equity <= 0 or weight <= 0:
                 return 0.0
-            target_notional = equity * self.max_position_pct
+            target_notional = equity * self.max_position_pct * weight
             return target_notional / price
         if signal.type == SignalType.SELL:
             return max(position_amount, 0.0)
