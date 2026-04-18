@@ -21,8 +21,8 @@ from .registry import register
 class MACrossover(Strategy):
     name = "ma_crossover"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
+        super().__init__(params, symbol, timeframe, **kwargs)
         self.fast = int(params.get("fast", 20))
         self.slow = int(params.get("slow", 50))
         if self.fast <= 0 or self.slow <= 0:

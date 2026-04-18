@@ -25,8 +25,8 @@ from .registry import register
 class RSIReversal(Strategy):
     name = "rsi_reversal"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
+        super().__init__(params, symbol, timeframe, **kwargs)
         self.period = int(params.get("period", 14))
         self.oversold = float(params.get("oversold", 30.0))
         self.overbought = float(params.get("overbought", 70.0))

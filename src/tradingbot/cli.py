@@ -96,6 +96,7 @@ def paper(
         params=settings.strategy.params,
         symbol=settings.symbol,
         timeframe=settings.timeframe,
+        state_path=Path("logs/strategy_state_paper.json"),
     )
 
     portfolio = Portfolio(starting_cash=settings.starting_cash)
@@ -412,9 +413,29 @@ def live(
         params=settings.strategy.params,
         symbol=settings.symbol,
         timeframe=settings.timeframe,
+        state_path=Path("logs/strategy_state_live.json"),
     )
 
     portfolio = Portfolio(starting_cash=settings.starting_cash)
+    # 실전 모드 startup 동기화: 거래소 실 잔고/포지션을 로컬 Portfolio 로 주입.
+    # 봇 재시작 후 "거래소엔 있는데 봇은 모르는 미아 포지션" 발생 방지.
+    try:
+        balance = exchange.fetch_balance()
+        current_price = None
+        try:
+            ticker = exchange.fetch_ticker(settings.symbol)
+            current_price = float(ticker.get("last") or ticker.get("close") or 0.0) or None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ticker 조회 실패 (avg_price 초기화 스킵): {}", exc)
+        portfolio.sync_from_exchange(
+            balance=balance,
+            symbol=settings.symbol,
+            current_price=current_price,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("거래소 잔고 동기화 실패 — startup 중단: {}", exc)
+        raise typer.Exit(code=3) from exc
+
     risk = RiskManager(
         max_position_pct=settings.risk.max_position_pct,
         stop_loss_pct=settings.risk.stop_loss_pct,

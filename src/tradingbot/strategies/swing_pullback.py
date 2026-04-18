@@ -33,8 +33,11 @@ from .registry import register
 class SwingPullback(Strategy):
     name = "swing_pullback"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
+        # 기본값을 super() 호출 전에 초기화: super() 내부의 _load_state_from_disk
+        # → set_state 가 성공하면 기본값을 디스크 상태로 덮어쓴다.
+        self._ready: bool = False
+        super().__init__(params, symbol, timeframe, **kwargs)
         # 1D EMA50 을 4h 기준 EMA(300) 로 근사 (기본). 1D TF 에서 돌리면 50 을 권장.
         self.macro_ema_period = int(params.get("macro_ema_period", 300))
         self.st_period = int(params.get("st_period", 10))
@@ -65,8 +68,12 @@ class SwingPullback(Strategy):
         if self.macd_fast >= self.macd_slow:
             raise ValueError("macd_fast 는 macd_slow 보다 작아야 함")
 
-        # 2단계 통과 상태 (눌림목 RSI 40~45 진입 경험 → ready)
-        self._ready: bool = False
+    # ---- 상태 영속화 훅 ----
+    def get_state(self) -> dict:
+        return {"ready": self._ready}
+
+    def set_state(self, state: dict) -> None:
+        self._ready = bool(state.get("ready", False))
 
     def warmup_bars(self) -> int:
         return max(

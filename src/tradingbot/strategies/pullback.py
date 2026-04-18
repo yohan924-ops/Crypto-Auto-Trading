@@ -31,8 +31,10 @@ from .registry import register
 class Pullback(Strategy):
     name = "pullback"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
+        # super() 내부 _load_state_from_disk 가 set_state 를 호출하며 이 값을 덮어쓸 수 있음.
+        self._ready: bool = False
+        super().__init__(params, symbol, timeframe, **kwargs)
         # 1단계: 장기 추세 필터
         self.ema_period = int(params.get("ema_period", 120))
         # 2단계: 진입 준비 (RSI + 선택적 BB 하단)
@@ -59,9 +61,12 @@ class Pullback(Strategy):
         if self.macd_fast >= self.macd_slow:
             raise ValueError("macd_fast 는 macd_slow 보다 작아야 함")
 
-        # 2단계 통과 여부(상태 머신). 3단계 확인 전까지 True 유지, 확인되거나
-        # 추세 이탈 시 False 로 리셋.
-        self._ready: bool = False
+    # ---- 상태 영속화 훅 ----
+    def get_state(self) -> dict:
+        return {"ready": self._ready}
+
+    def set_state(self, state: dict) -> None:
+        self._ready = bool(state.get("ready", False))
 
     def warmup_bars(self) -> int:
         return max(

@@ -23,12 +23,26 @@ from .registry import register
 class VolatilityBreakout(Strategy):
     name = "volatility_breakout"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
+        # NOTE: _entered_bar 는 현재 history 기준 인덱스라 재시작 후 history 를
+        # 새로 backfill 하면 의미가 달라질 수 있다. "최근 세션에 진입했나"
+        # 여부만 복원(bool) 으로 변환해 보수적으로 사용.
+        self._entered_bar: int | None = None
+        super().__init__(params, symbol, timeframe, **kwargs)
         self.k = float(params.get("k", 0.5))
         if not 0 < self.k < 2:
             raise ValueError(f"k 는 0~2 범위여야 함: {self.k}")
-        self._entered_bar: int | None = None
+
+    # ---- 상태 영속화 훅 ----
+    def get_state(self) -> dict:
+        # 인덱스 자체를 저장하면 history 길이가 바뀐 뒤 잘못 청산될 수 있어
+        # "이전 세션에 진입 상태였다" 플래그로만 보존.
+        return {"had_position": self._entered_bar is not None}
+
+    def set_state(self, state: dict) -> None:
+        # 재시작 직후 첫 on_bar 가 호출되면 청산 SELL 을 내기 위해 -1 로 초기화.
+        # (current_idx > self._entered_bar 조건으로 다음 bar SELL 진입)
+        self._entered_bar = -1 if state.get("had_position") else None
 
     def warmup_bars(self) -> int:
         # 전일 고/저가 필요 → 최소 2봉

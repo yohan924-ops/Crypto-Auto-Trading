@@ -31,8 +31,8 @@ from .registry import register
 class TripleScreen(Strategy):
     name = "triple_screen"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
+        super().__init__(params, symbol, timeframe, **kwargs)
         self.macd_fast = int(params.get("macd_fast", 12))
         self.macd_slow = int(params.get("macd_slow", 26))
         self.macd_signal = int(params.get("macd_signal", 9))

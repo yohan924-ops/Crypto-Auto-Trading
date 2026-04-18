@@ -84,8 +84,27 @@ class CCXTAdapter:
         side: 'buy' | 'sell'
         params: CCXT unified/거래소별 파라미터. ``clientOrderId`` 를 넣으면
         재시도 시 중복 주문 방지 (Binance: newClientOrderId, Upbit: identifier).
+
+        전송 전 ``amount_to_precision`` / ``price_to_precision`` 으로 거래소별
+        수량·호가 단위에 맞춤. 특히 Upbit 의 KRW 마켓은 호가 단위가 가격대별로
+        다른데(0.5 / 1 / 10 …) CCXT 가 알아서 반올림해 Invalid Price 에러를 막는다.
         """
-        return self.exchange.create_order(symbol, type, side, amount, price, params or {})
+        amount_str = self.exchange.amount_to_precision(symbol, amount)
+        amount_precise = float(amount_str)
+        price_precise: float | None = None
+        if price is not None:
+            price_str = self.exchange.price_to_precision(symbol, price)
+            price_precise = float(price_str)
+        return self.exchange.create_order(
+            symbol, type, side, amount_precise, price_precise, params or {}
+        )
+
+    # ---------- 정밀도 헬퍼 (외부에서 주문 전 미리 반올림할 때 사용) ----------
+    def amount_to_precision(self, symbol: str, amount: float) -> float:
+        return float(self.exchange.amount_to_precision(symbol, amount))
+
+    def price_to_precision(self, symbol: str, price: float) -> float:
+        return float(self.exchange.price_to_precision(symbol, price))
 
     def cancel_order(self, order_id: str, symbol: str) -> dict:
         return self.exchange.cancel_order(order_id, symbol)

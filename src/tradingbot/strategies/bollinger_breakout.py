@@ -19,8 +19,8 @@ from .registry import register
 class BollingerBreakout(Strategy):
     name = "bollinger_breakout"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
+        super().__init__(params, symbol, timeframe, **kwargs)
         self.period = int(params.get("period", 20))
         self.num_std = float(params.get("num_std", 2.0))
         if self.period <= 0 or self.num_std <= 0:

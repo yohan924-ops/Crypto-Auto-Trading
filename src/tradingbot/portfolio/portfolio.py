@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from loguru import logger
 
@@ -62,6 +63,61 @@ class Portfolio:
             if position.amount <= 1e-12:
                 position.amount = 0.0
                 position.avg_price = 0.0
+
+    def sync_from_exchange(
+        self,
+        balance: dict[str, Any],
+        symbol: str,
+        current_price: float | None = None,
+    ) -> None:
+        """거래소 실제 잔고를 Portfolio 에 반영.
+
+        봇 재시작 시 호출. 로컬 포지션과 거래소 실제 잔고가 어긋나면 "미아 포지션"
+        이 발생하므로, live 모드 시작 직후 이 함수로 동기화해야 한다.
+
+        ``balance`` 는 CCXT ``fetch_balance()`` 결과. 예::
+
+            {"USDT": {"free": 8000.0, "used": 0.0, "total": 8000.0},
+             "BTC":  {"free": 0.01,   "used": 0.0, "total": 0.01}, ...}
+
+        ``symbol`` 은 이 봇이 운용하는 단일 페어 (예 ``BTC/USDT``). base/quote 를
+        추출해서 해당 두 자산만 반영. 다른 자산 보유분은 건드리지 않는다.
+
+        ``current_price`` 가 제공되고 로컬 avg_price 가 0 이면 "최초 진입가"를
+        current_price 로 가정. 손절 기준이 비정상 동작하는 것을 막는 보수적 선택.
+        """
+        base, quote = symbol.split("/")
+        quote_info = balance.get(quote) or {}
+        base_info = balance.get(base) or {}
+        quote_free = float(quote_info.get("free") or 0.0)
+        base_total = float(base_info.get("total") or 0.0)
+
+        self.cash = quote_free
+        position = self.get_position(symbol)
+        prev_amount = position.amount
+        position.amount = base_total
+
+        if base_total > 0 and position.avg_price <= 0:
+            # 재시작 직후 과거 avg_price 를 모를 때 — 현재가를 보수적 기준으로 사용.
+            # 손절 -5% 가 진입가 -5% 가 아니라 "시작가 기준 -5%" 로 동작해 부작용
+            # 가능성 있으므로 반드시 로그로 알림.
+            if current_price and current_price > 0:
+                position.avg_price = current_price
+                logger.warning(
+                    "동기화 후 avg_price 를 현재가({:.2f})로 초기화 — 실제 진입가 확인 권장",
+                    current_price,
+                )
+            else:
+                logger.warning(
+                    "동기화 후 avg_price 를 모름. 손절 비활성 상태 (fetch_ticker 권장)."
+                )
+        elif base_total <= 0:
+            position.avg_price = 0.0
+
+        logger.info(
+            "거래소 잔고 동기화: cash={:.2f} {}, {} amount {:.8f} → {:.8f} (avg={:.2f})",
+            self.cash, quote, base, prev_amount, position.amount, position.avg_price,
+        )
 
     def equity(self, marks: dict[str, float]) -> float:
         """현금 + 보유 포지션의 시가 평가 총합.

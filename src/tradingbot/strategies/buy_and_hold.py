@@ -15,9 +15,16 @@ from .registry import register
 class BuyAndHold(Strategy):
     name = "buy_and_hold"
 
-    def __init__(self, params: dict, symbol: str, timeframe: str) -> None:
-        super().__init__(params, symbol, timeframe)
+    def __init__(self, params: dict, symbol: str, timeframe: str, **kwargs) -> None:
         self._bought = False
+        super().__init__(params, symbol, timeframe, **kwargs)
+
+    # ---- 상태 영속화 훅 ----
+    def get_state(self) -> dict:
+        return {"bought": self._bought}
+
+    def set_state(self, state: dict) -> None:
+        self._bought = bool(state.get("bought", False))
 
     def warmup_bars(self) -> int:
         return 0
