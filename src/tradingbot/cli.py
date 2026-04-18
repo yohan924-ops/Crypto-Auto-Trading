@@ -99,6 +99,7 @@ def paper(
         max_position_pct=settings.risk.max_position_pct,
         stop_loss_pct=settings.risk.stop_loss_pct,
         max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+        state_path=Path("logs/risk_state_paper.json"),
     )
     broker = PaperBroker(fee_bps=settings.fee_bps, slippage_bps=settings.slippage_bps)
     notifiers = build_notifiers(
@@ -108,6 +109,11 @@ def paper(
     )
 
     warmup = max(strategy.warmup_bars(), 5)
+    if settings.use_websocket and settings.exchange.id != "binance":
+        logger.warning(
+            "use_websocket=true 이지만 현재 거래소({})는 WebSocket 지원이 Binance 전용이라 REST 폴링으로 동작합니다.",
+            settings.exchange.id,
+        )
     if settings.use_websocket and settings.exchange.id == "binance":
         from tradingbot.data.ws_feed import BinanceWebSocketFeed
 
@@ -405,8 +411,13 @@ def live(
         max_position_pct=settings.risk.max_position_pct,
         stop_loss_pct=settings.risk.stop_loss_pct,
         max_daily_loss_pct=settings.risk.max_daily_loss_pct,
+        state_path=Path("logs/risk_state_live.json"),
     )
     broker = LiveBroker(exchange=exchange)
+    if settings.use_websocket:
+        logger.warning(
+            "use_websocket=true 는 live 모드에서 현재 지원되지 않아 REST 폴링으로 동작합니다."
+        )
     notifiers = build_notifiers(
         settings.notifiers,
         telegram_token=settings.telegram_bot_token,

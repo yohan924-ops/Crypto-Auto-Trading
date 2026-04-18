@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import html
 from pathlib import Path
 
 import pandas as pd
@@ -144,8 +145,8 @@ def _trades_table(result: BacktestResult) -> str:
     for t in result.trades:
         rows.append(
             f"<tr>"
-            f"<td>{t.timestamp.isoformat()}</td>"
-            f"<td>{t.symbol}</td>"
+            f"<td>{html.escape(t.timestamp.isoformat())}</td>"
+            f"<td>{html.escape(t.symbol)}</td>"
             f"<td class='{'buy' if t.side == OrderSide.BUY else 'sell'}'>{t.side.value.upper()}</td>"
             f"<td>{t.amount:.6f}</td>"
             f"<td>{t.price:,.2f}</td>"
@@ -237,12 +238,12 @@ def render_html_report(result: BacktestResult, strategy_name: str, output: Path)
     def cls(val: float) -> str:
         return "pos" if val >= 0 else "neg"
 
-    html = _HTML_TEMPLATE.format(
-        symbol=result.symbol,
-        timeframe=result.timeframe,
-        start=result.start.date().isoformat(),
-        end=result.end.date().isoformat(),
-        strategy=strategy_name,
+    html_out = _HTML_TEMPLATE.format(
+        symbol=html.escape(result.symbol),
+        timeframe=html.escape(result.timeframe),
+        start=html.escape(result.start.date().isoformat()),
+        end=html.escape(result.end.date().isoformat()),
+        strategy=html.escape(strategy_name),
         return_pct=result.total_return_pct,
         ret_cls=cls(result.total_return_pct),
         mdd=result.max_drawdown_pct,
@@ -257,5 +258,5 @@ def render_html_report(result: BacktestResult, strategy_name: str, output: Path)
         heatmap_html=heatmap_html,
         trades_html=_trades_table(result),
     )
-    output.write_text(html, encoding="utf-8")
+    output.write_text(html_out, encoding="utf-8")
     return output

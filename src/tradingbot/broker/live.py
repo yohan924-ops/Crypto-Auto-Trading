@@ -35,10 +35,15 @@ class LiveBroker(Broker):
             raise NotImplementedError("Phase 4 LiveBroker 는 시장가 주문만 지원")
         if order.amount <= 0:
             raise ValueError("주문 수량은 0보다 커야 함")
+        # 재시도 시 중복 주문 방지를 위해 주문마다 고유 clientOrderId 를 전달.
+        # CCXT unified 키를 쓰면 Binance(newClientOrderId)/Upbit(identifier) 로 매핑된다.
+        # Binance 규격: 알파벳+숫자+'-' 최대 36자. order.id 는 12자 hex → 'bot-' 접두.
+        client_order_id = f"bot-{order.id}"
         result = self._create_order_with_retry(
             symbol=order.symbol,
             side="buy" if order.side == OrderSide.BUY else "sell",
             amount=order.amount,
+            client_order_id=client_order_id,
         )
         return self._to_fill(order, result, mark_price)
 
@@ -50,22 +55,35 @@ class LiveBroker(Broker):
         before_sleep=before_sleep_log(logger, "WARNING"),  # type: ignore[arg-type]
     )
     def _create_order_with_retry(
-        self, symbol: str, side: str, amount: float
+        self, symbol: str, side: str, amount: float, client_order_id: str
     ) -> dict:
         return self.exchange.create_order(
-            symbol=symbol, type="market", side=side, amount=amount
+            symbol=symbol,
+            type="market",
+            side=side,
+            amount=amount,
+            params={"clientOrderId": client_order_id},
         )
 
     @staticmethod
     def _to_fill(order: Order, result: dict, mark_price: float) -> Fill:
         """ccxt 주문 응답을 Fill 로 변환.
 
-        시장가라면 보통 result['status'] == 'closed' 로 즉시 체결되지만,
-        일부 거래소는 반환이 얇아 average/filled 가 비어있을 수 있다.
-        그 경우 mark_price 와 amount 로 보수적으로 채운다.
+        체결 수량(filled)은 **응답에 명시된 값만** 신뢰한다.
+        - status == 'closed' + filled 누락: 전량 체결로 간주 (order.amount)
+        - 그 외(open/partial/누락): filled 값이 있으면 그대로, 없으면 0
+          → Portfolio 과대 기록 방지. 실제 체결 수량이 부족하면 다음 주문 사이징에
+            반영되도록 보수적으로 처리.
+        평균 체결가도 응답에 있으면 그 값, 없을 때만 mark_price 로 보완.
         """
         filled_raw = result.get("filled")
-        filled = float(filled_raw) if filled_raw not in (None, "") else order.amount
+        status = (result.get("status") or "").lower()
+        if filled_raw not in (None, ""):
+            filled = float(filled_raw)
+        elif status == "closed":
+            filled = order.amount
+        else:
+            filled = 0.0
         avg_raw = result.get("average") or result.get("price")
         avg_price = float(avg_raw) if avg_raw not in (None, "") else mark_price
 

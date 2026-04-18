@@ -49,7 +49,9 @@ class TelegramNotifier(Notifier):
         try:
             self._send(text)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("텔레그램 전송 실패 ({}): {}", event.value, exc)
+            # str(exc) 는 HTTPError 등에서 URL(=봇 토큰 포함) 을 담을 수 있으므로
+            # 예외 타입만 로그에 남긴다.
+            logger.warning("텔레그램 전송 실패 ({}): {}", event.value, type(exc).__name__)
 
     def _send(self, text: str) -> None:
         url = f"{_API_BASE}/bot{self.bot_token}/sendMessage"

@@ -19,6 +19,13 @@ class PaperBroker(Broker):
     fee_bps: float = 10.0
     slippage_bps: float = 5.0
 
+    def __post_init__(self) -> None:
+        # 음수 입력은 "주문할수록 돈이 는다" 는 비현실적 백테스트로 이어지므로 거부.
+        if self.fee_bps < 0:
+            raise ValueError(f"fee_bps 는 0 이상이어야 함: {self.fee_bps}")
+        if self.slippage_bps < 0:
+            raise ValueError(f"slippage_bps 는 0 이상이어야 함: {self.slippage_bps}")
+
     def submit(self, order: Order, mark_price: float) -> Fill:
         if order.type != OrderType.MARKET:
             raise NotImplementedError("Phase 1 페이퍼 브로커는 시장가 주문만 지원")

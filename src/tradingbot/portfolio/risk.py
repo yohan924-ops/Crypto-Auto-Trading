@@ -3,12 +3,21 @@
 - max_position_pct: 신규 진입 시 자산의 몇 % 까지 할당할지
 - stop_loss_pct: 포지션 평가손이 이 비율을 넘으면 강제 청산 신호
 - max_daily_loss_pct: 일일 손실이 이 비율에 도달하면 당일 추가 거래 차단
+
+상태 영속화:
+  halt/day_start_equity 는 프로세스 메모리에만 있으면 재시작으로 손실 한도가 리셋되어
+  일일 서킷브레이커를 우회할 수 있다. ``state_path`` 를 지정하면 매 업데이트마다
+  JSON 으로 저장하고 생성 시 복원한다.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from pathlib import Path
+
+from loguru import logger
 
 from tradingbot.portfolio.portfolio import Position
 from tradingbot.strategies.base import Signal, SignalType
@@ -19,11 +28,53 @@ class RiskManager:
     max_position_pct: float = 0.10
     stop_loss_pct: float = 0.05
     max_daily_loss_pct: float = 0.05
+    state_path: Path | None = None  # 지정 시 halt/일일 자산을 이 파일에 영속화
 
     # 내부 상태 (일자별 리셋)
     _current_day: date | None = field(default=None, repr=False)
     _day_start_equity: float | None = field(default=None, repr=False)
     _halted: bool = field(default=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.state_path is not None:
+            self._load_state()
+
+    # ---------- 영속화 ----------
+    def _load_state(self) -> None:
+        path = self.state_path
+        if path is None or not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("RiskManager 상태 파일 읽기 실패 ({}): {}", path, exc)
+            return
+        day_str = data.get("current_day")
+        self._current_day = date.fromisoformat(day_str) if day_str else None
+        self._day_start_equity = data.get("day_start_equity")
+        self._halted = bool(data.get("halted", False))
+        logger.info(
+            "RiskManager 상태 복원: day={}, halted={}, day_start={}",
+            self._current_day,
+            self._halted,
+            self._day_start_equity,
+        )
+
+    def _save_state(self) -> None:
+        if self.state_path is None:
+            return
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "current_day": self._current_day.isoformat() if self._current_day else None,
+            "day_start_equity": self._day_start_equity,
+            "halted": self._halted,
+        }
+        try:
+            self.state_path.write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+        except OSError as exc:
+            logger.warning("RiskManager 상태 저장 실패 ({}): {}", self.state_path, exc)
 
     def size_order(
         self,
@@ -52,11 +103,24 @@ class RiskManager:
             return max(position_amount, 0.0)
         return 0.0
 
-    def check_stop_loss(self, position: Position, current_price: float) -> bool:
-        """보유 포지션이 손절선(-stop_loss_pct) 이하로 내려갔는지 여부."""
+    def check_stop_loss(
+        self,
+        position: Position,
+        current_price: float,
+        low_price: float | None = None,
+    ) -> bool:
+        """보유 포지션이 손절선(-stop_loss_pct) 이하로 내려갔는지 여부.
+
+        ``low_price`` 가 제공되면 봉 내 저가도 함께 검사한다. close 만 보면
+        "장중에 손절선 찍고 반등" 한 경우를 놓치므로, 가장 불리한 가격
+        (= min(current, low)) 을 기준으로 판단한다.
+        """
         if position.amount <= 0 or position.avg_price <= 0 or current_price <= 0:
             return False
-        pnl_pct = (current_price - position.avg_price) / position.avg_price
+        worst_price = current_price
+        if low_price is not None and low_price > 0:
+            worst_price = min(worst_price, low_price)
+        pnl_pct = (worst_price - position.avg_price) / position.avg_price
         return pnl_pct <= -self.stop_loss_pct
 
     def update_day(self, now: datetime, equity: float) -> bool:
@@ -69,6 +133,7 @@ class RiskManager:
             self._current_day = today
             self._day_start_equity = equity
             self._halted = False
+            self._save_state()
             return True
         return False
 
@@ -77,8 +142,9 @@ class RiskManager:
         if self._day_start_equity is None or self._day_start_equity <= 0:
             return
         daily_pnl_pct = (equity - self._day_start_equity) / self._day_start_equity
-        if daily_pnl_pct <= -self.max_daily_loss_pct:
+        if daily_pnl_pct <= -self.max_daily_loss_pct and not self._halted:
             self._halted = True
+            self._save_state()
 
     @property
     def halted(self) -> bool:

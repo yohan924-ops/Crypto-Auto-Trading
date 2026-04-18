@@ -40,13 +40,15 @@ class RiskCfg(BaseModel):
 class Settings(BaseSettings):
     """YAML 기본값 + .env 로 시크릿 주입.
 
-    환경변수 이름은 대문자. 중첩 필드는 ``__`` 로 구분 가능 (예: EXCHANGE__SANDBOX=false).
+    .env/환경변수로는 시크릿(대문자 최상위 필드)만 주입한다.
+    거래 파라미터(symbol, exchange.sandbox, risk.*)는 반드시 settings.yaml 에서만
+    설정하도록 중첩 delimiter 를 비활성화했다. 과거 EXCHANGE__SANDBOX 같은 환경변수
+    한 줄로 Testnet→Mainnet 전환이 일어나는 사고를 막기 위함.
     """
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        env_nested_delimiter="__",
         extra="ignore",
     )
 

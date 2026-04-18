@@ -47,6 +47,7 @@ class MultiBacktestResult:
     sortino: float
     num_trades: int
     num_events: int
+    win_rate_pct: float = 0.0
     per_symbol: dict[str, dict] = field(default_factory=dict)
     equity_curve: pd.DataFrame = field(repr=False, default_factory=pd.DataFrame)
     trades: list[Fill] = field(repr=False, default_factory=list)
@@ -172,6 +173,7 @@ class MultiAssetBacktester:
             for item in self.items
         }
 
+        # 승률은 심볼별로 별도 계산하는 게 정확하지만, 전체 FIFO 기준으로 근사
         result = MultiBacktestResult(
             start=events[0][0].to_pydatetime() if hasattr(events[0][0], "to_pydatetime") else events[0][0],
             end=events[-1][0].to_pydatetime() if hasattr(events[-1][0], "to_pydatetime") else events[-1][0],
@@ -184,12 +186,11 @@ class MultiAssetBacktester:
             sortino=_sortino(bar_returns, ann),
             num_trades=len(trades),
             num_events=len(events),
+            win_rate_pct=_win_rate(trades),
             per_symbol=per_symbol,
             equity_curve=equity_curve,
             trades=trades,
         )
-        # 승률은 심볼별로 별도 계산하는 게 정확하지만, 전체 FIFO 기준으로 근사
-        result.win_rate_pct = _win_rate(trades)  # type: ignore[attr-defined]
         logger.info(
             "멀티 자산 백테스트 완료: return={:+.2f}% trades={} symbols={}",
             result.total_return_pct,

@@ -67,25 +67,34 @@ def fetch_historical(
     start_ms = int(start.timestamp() * 1000)
     end_ms = int(end.timestamp() * 1000)
 
-    # 이미 캐시에 있는 구간 건너뛰기: 캐시의 max timestamp 보다 크면 그 이후만 조회
-    if not cached.empty:
-        cached_max_ms = int(cached["timestamp"].max().timestamp() * 1000)
-        fetch_from_ms = max(start_ms, cached_max_ms + tf_ms)
+    # 요청 구간 [start, end) 중 캐시가 커버하지 못하는 부분 두 곳을 모두 조회:
+    #   1) 앞쪽 gap: [start, cached_min)
+    #   2) 뒤쪽 gap: (cached_max, end)
+    # 과거 구현은 뒤쪽만 조회해 start < cached_min 이면 앞쪽 구간을 통째로 놓쳤다.
+    fetch_ranges: list[tuple[int, int]] = []
+    if cached.empty:
+        fetch_ranges.append((start_ms, end_ms))
     else:
-        fetch_from_ms = start_ms
+        cached_min_ms = int(cached["timestamp"].min().timestamp() * 1000)
+        cached_max_ms = int(cached["timestamp"].max().timestamp() * 1000)
+        if start_ms < cached_min_ms:
+            fetch_ranges.append((start_ms, min(cached_min_ms, end_ms)))
+        if cached_max_ms + tf_ms < end_ms:
+            fetch_ranges.append((max(start_ms, cached_max_ms + tf_ms), end_ms))
 
     pages: list[pd.DataFrame] = []
-    cursor = fetch_from_ms
-    while cursor < end_ms:
-        logger.debug("fetch_ohlcv since={} limit={}", cursor, _PAGE_LIMIT)
-        page = exchange.fetch_ohlcv(symbol, timeframe, since=cursor, limit=_PAGE_LIMIT)
-        if page.empty:
-            break
-        pages.append(page)
-        last_ts = int(page["timestamp"].iloc[-1].timestamp() * 1000)
-        if last_ts <= cursor:
-            break
-        cursor = last_ts + tf_ms
+    for range_start, range_end in fetch_ranges:
+        cursor = range_start
+        while cursor < range_end:
+            logger.debug("fetch_ohlcv since={} limit={}", cursor, _PAGE_LIMIT)
+            page = exchange.fetch_ohlcv(symbol, timeframe, since=cursor, limit=_PAGE_LIMIT)
+            if page.empty:
+                break
+            pages.append(page)
+            last_ts = int(page["timestamp"].iloc[-1].timestamp() * 1000)
+            if last_ts <= cursor:
+                break
+            cursor = last_ts + tf_ms
 
     fetched = pd.concat(pages, ignore_index=True) if pages else cached.iloc[0:0]
     merged = pd.concat([cached, fetched], ignore_index=True)

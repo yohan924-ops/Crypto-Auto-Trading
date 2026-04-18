@@ -30,8 +30,16 @@ class CCXTAdapter:
         )
         self.exchange_id = exchange_id
         self.sandbox = sandbox
-        # Binance 는 set_sandbox_mode 지원. 일부 거래소는 테스트 URL 이 없어 건너뜀.
-        if sandbox and self.exchange.urls.get("test"):
+        # sandbox=True 인데 거래소가 테스트 URL 을 제공하지 않으면 — Upbit 등 —
+        # 조용히 실전 URL 로 접속되어 사용자가 속을 수 있다. 명시적으로 거부한다.
+        # 사용자는 `exchange.sandbox: false` 로 바꾸고 실전 인지 상태에서 진입해야 함.
+        if sandbox:
+            if not self.exchange.urls.get("test"):
+                raise ValueError(
+                    f"거래소 '{exchange_id}' 는 sandbox(테스트넷) 를 지원하지 않습니다. "
+                    f"config 에서 exchange.sandbox 를 false 로 설정하거나, Binance 같은 "
+                    f"테스트넷 지원 거래소로 변경하세요."
+                )
             self.exchange.set_sandbox_mode(True)
 
     # ---------- 읽기 ----------
@@ -68,14 +76,16 @@ class CCXTAdapter:
         side: str,
         amount: float,
         price: float | None = None,
+        params: dict | None = None,
     ) -> dict:
         """주문 생성. 거래소 원본 응답 dict 반환.
 
         type: 'market' | 'limit'
         side: 'buy' | 'sell'
+        params: CCXT unified/거래소별 파라미터. ``clientOrderId`` 를 넣으면
+        재시도 시 중복 주문 방지 (Binance: newClientOrderId, Upbit: identifier).
         """
-        params: dict = {}
-        return self.exchange.create_order(symbol, type, side, amount, price, params)
+        return self.exchange.create_order(symbol, type, side, amount, price, params or {})
 
     def cancel_order(self, order_id: str, symbol: str) -> dict:
         return self.exchange.cancel_order(order_id, symbol)
