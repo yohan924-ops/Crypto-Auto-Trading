@@ -1,0 +1,78 @@
+# Sleeve 기반 최종 아키텍처 — "랠리카" 구성 (2026-04-19 Gemini 최종 승인)
+#
+# 설계 철학: 수학 최적 (30/10/60, +39%) 에서 한 발 후퇴.
+# 사용자 직관 ("ETH 2위 메이저 10% 는 너무 작음") + Gemini 재검토 (생존자 편향 과잉
+# 노출) 결과: 수익 -9%p 희생하고 포트폴리오 대표성 + 리스크 균형 확보.
+#
+# 전략: 3자산 전원 Bollinger Breakout 3.0 (단일 전략, 필터 없음)
+# 배분: BTC 30 / ETH 30 / SOL 40 (전통 균형)
+# 손절:
+#   BTC/ETH: ATR × 2.0 (변동성 정규화)
+#   SOL    : 고정 8% (하이베타 하드 스탑, 모멘텀 정석)
+# 방어막: 계좌 전체 일일 -10% 서킷브레이커
+# 기대 수익 (단순 가중): +30% 내외 / 4년 ≈ 연 7%
+
+mode: backtest
+live_confirmed: false
+starting_cash: 10000.0
+timeframe: "4h"
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+
+# 계좌 전체 일일 손실 서킷브레이커 (-10% 도달 시 모든 Sleeve halt)
+sleeve_max_daily_loss_pct: 0.10
+
+sleeves:
+  - name: BTC
+    symbol: "BTC/USDT"
+    allocation_pct: 0.30
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08        # ATR off 시 fallback
+      max_daily_loss_pct: 1.0    # Sleeve 개별 CB 비활성 (orchestrator 전담)
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: true
+      atr_multiplier: 2.0
+
+  - name: ETH
+    symbol: "ETH/USDT"
+    allocation_pct: 0.30         # 10 → 30: 시총 2위 메이저 대표성 확보
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08
+      max_daily_loss_pct: 1.0
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: true
+      atr_multiplier: 2.0
+
+  - name: SOL
+    symbol: "SOL/USDT"
+    allocation_pct: 0.40         # 60 → 40: 생존자 편향 노출 축소
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08          # 고정 8% (SOL 하이베타, 모멘텀 정석)
+      max_daily_loss_pct: 1.0
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: false          # SOL 만 ATR off
+      atr_multiplier: 2.0
+
+notifiers: [console]

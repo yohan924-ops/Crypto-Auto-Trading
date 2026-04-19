@@ -1,0 +1,36 @@
+# Phase B — SOL 단독 Gemini 튜닝 버전
+# 주요 변경:
+#   - Supertrend: (10, 3) → (20, 5) (SOL 고변동성 방어)
+#   - trailing activate: 10% → 15% (큰 파동 담기)
+#   - trailing stop: 5% → 7% (SOL 특유 꼬리 견디기)
+mode: backtest
+live_confirmed: false
+symbol: "SOL/USDT"
+timeframe: "4h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: swing_pullback
+  params:
+    macro_ema_period: 300
+    st_period: 20             # 10 → 20
+    st_multiplier: 5.0        # 3 → 5
+    rsi_period: 14
+    rsi_pullback_low: 40.0    # 유지
+    rsi_pullback_high: 45.0   # 유지
+    rsi_overbought: 70.0
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    require_volume: true
+    vol_period: 20
+    vol_mult: 1.0
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.07     # 0.05 → 0.07
+  trailing_activate_pct: 0.15 # 0.10 → 0.15
+notifiers: [console]

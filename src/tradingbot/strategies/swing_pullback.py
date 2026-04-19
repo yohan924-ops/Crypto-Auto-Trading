@@ -84,6 +84,62 @@ class SwingPullback(Strategy):
             self.vol_period + 1,
         )
 
+    def status_snapshot(self, history: pd.DataFrame) -> str:
+        """Heartbeat 용 현재 지표 요약.
+
+        출력 예: "swing_pullback | close=66234.5 | EMA300 below (-1.2%) | RSI=52.3 |
+        ST=DOWN | MACDh=-12.3 | ready=False → BUY 조건 미달"
+        """
+        need = self.warmup_bars()
+        if len(history) < need:
+            return f"{self.name} 워밍업 {len(history)}/{need}봉"
+
+        from tradingbot.utils.indicators import ema, macd, rsi, supertrend
+
+        closes = history["close"]
+        highs = history["high"]
+        lows = history["low"]
+        close = float(closes.iloc[-1])
+        macro_ema = float(ema(closes, self.macro_ema_period).iloc[-1])
+        st_trend, _ = supertrend(highs, lows, closes, self.st_period, self.st_multiplier)
+        curr_st = int(st_trend.iloc[-1])
+        curr_rsi = float(rsi(closes, self.rsi_period).iloc[-1])
+        _, _, hist = macd(closes, self.macd_fast, self.macd_slow, self.macd_signal)
+        curr_hist = float(hist.iloc[-1])
+
+        ema_pct = (close - macro_ema) / macro_ema * 100 if macro_ema else 0.0
+        ema_tag = "ABOVE" if close > macro_ema else "BELOW"
+        st_tag = "UP" if curr_st == 1 else "DOWN"
+
+        # 진입 조건 평가
+        ema_ok = close > macro_ema
+        st_ok = curr_st == 1
+        rsi_ready = self._ready
+        rsi_in_band = self.rsi_pullback_low <= curr_rsi <= self.rsi_pullback_high
+        macd_flip = curr_hist > 0 and len(hist) >= 2 and float(hist.iloc[-2]) <= 0
+
+        missing = []
+        if not ema_ok:
+            missing.append("EMA↓")
+        if not st_ok:
+            missing.append("ST↓")
+        if not rsi_ready and not rsi_in_band:
+            missing.append(f"RSI({curr_rsi:.1f}) 범위외")
+        if not macd_flip:
+            missing.append("MACD flip X")
+
+        if missing:
+            status = "대기 (" + ", ".join(missing) + ")"
+        else:
+            status = "BUY 조건 충족 (다음 봉)"
+
+        return (
+            f"{self.name} | close={close:.2f} | "
+            f"EMA{self.macro_ema_period} {ema_tag}({ema_pct:+.2f}%) | "
+            f"RSI={curr_rsi:.1f} | ST={st_tag} | MACDh={curr_hist:+.2f} | "
+            f"ready={rsi_ready} → {status}"
+        )
+
     def on_bar(self, bar: Bar, history: pd.DataFrame) -> Signal:
         if len(history) < self.warmup_bars():
             return Signal(

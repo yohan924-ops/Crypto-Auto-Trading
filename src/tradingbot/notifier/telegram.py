@@ -34,6 +34,7 @@ class TelegramNotifier(Notifier):
         NotifyEvent.CIRCUIT_BREAKER: "🚨",
         NotifyEvent.ERROR: "❌",
         NotifyEvent.DAILY_REPORT: "📊",
+        NotifyEvent.HEARTBEAT: "💓",
     }
 
     def __init__(self, bot_token: str, chat_id: str, timeout: float = 5.0) -> None:

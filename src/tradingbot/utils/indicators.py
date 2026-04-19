@@ -152,6 +152,59 @@ def supertrend(
     return trend, line
 
 
+def chop(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14
+) -> pd.Series:
+    """Choppiness Index (1991, Dreiss) — 시장의 횡보/추세 여부 판별.
+
+    해석:
+      - 61.8 이상: 횡보장 (chop, mean-reversion 에 유리)
+      - 38.2 이하: 추세장 (trend-following 에 유리)
+      - 그 사이: 애매
+
+    반환: 0~100 범위 Series. 초기 period 구간은 NaN.
+    수식: 100 × log10(Σ ATR(1) / (Max(High) - Min(Low))) / log10(period)
+    """
+    import numpy as np
+
+    if period <= 0:
+        raise ValueError(f"period must be positive: {period}")
+    # True Range (period=1) 누적합
+    prev_close = close.shift(1)
+    tr = pd.concat(
+        [(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+    ).max(axis=1)
+    tr_sum = tr.rolling(window=period, min_periods=period).sum()
+    high_max = high.rolling(window=period, min_periods=period).max()
+    low_min = low.rolling(window=period, min_periods=period).min()
+    range_ = high_max - low_min
+    # 분모 0 방지
+    safe_range = range_.replace(0, np.nan)
+    return 100.0 * np.log10(tr_sum / safe_range) / np.log10(period)
+
+
+def percent_b(
+    series: pd.Series, period: int = 20, num_std: float = 2.0
+) -> pd.Series:
+    """볼린저 %B — 가격이 밴드 내 어느 위치에 있는지 0~1 스케일로 표현.
+
+    해석:
+      - %B < 0: 가격이 하단 밴드 아래 (패닉셀)
+      - %B = 0: 가격이 하단 밴드
+      - %B = 0.5: 가격이 중앙선
+      - %B = 1: 가격이 상단 밴드
+      - %B > 1: 가격이 상단 밴드 위 (과열)
+
+    Mean Reversion 진입/청산 기준으로 사용.
+    """
+    middle, upper, lower = bollinger_bands(series, period, num_std)
+    band_width = upper - lower
+    # 분모 0 방지 (flat 구간)
+    import numpy as np
+    safe_width = band_width.replace(0, np.nan)
+    return (series - lower) / safe_width
+
+
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     """RSI (Relative Strength Index) — Wilder 방식.
 

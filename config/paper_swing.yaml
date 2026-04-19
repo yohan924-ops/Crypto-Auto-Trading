@@ -37,6 +37,10 @@ risk:
   trailing_stop_pct: 0.05
   trailing_activate_pct: 0.10
 
+heartbeat:
+  enabled: true             # 매매 빈도 낮은 스윙 전략의 "봇 살아있음" 보고
+  hours_utc: [0, 12]        # KST 09:00, 21:00 — 하루 2회 텔레그램 상태 요약
+
 notifiers:
   - console
-  - telegram                # 매수/매도/손절/일일리포트 → 텔레그램 @KKHCryptoBot
+  - telegram                # 매수/매도/손절/일일리포트/heartbeat → 텔레그램 @KKHCryptoBot

@@ -1,0 +1,27 @@
+# ETH 단독 Mean Reversion (Gemini 순수 역추세 전술)
+# CHOP 61.8 이상 (횡보 확인) + %B < 0 (패닉셀) → BUY
+# 중앙선 SMA20 도달 → SELL
+mode: backtest
+live_confirmed: false
+symbol: "ETH/USDT"
+timeframe: "4h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: mean_reversion
+  params:
+    chop_period: 14
+    chop_threshold: 61.8    # Gemini 제안 임계
+    bb_period: 20
+    bb_std: 2.0
+    percent_b_low: 0.0      # 하단 뚫음 판정
+    percent_b_high: 1.0     # 상단 돌파 시 청산
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+notifiers: [console]

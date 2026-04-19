@@ -99,6 +99,20 @@ class Strategy(ABC):
     def on_stop(self) -> None:
         """선택적 훅. 엔진 종료 시 호출."""
 
+    # ---------- Heartbeat (정기 상태 보고) ----------
+    def status_snapshot(self, history: pd.DataFrame) -> str:
+        """봇 상태 요약을 사람이 읽을 수 있는 한 줄로 반환.
+
+        Heartbeat 알림에서 호출. 구체 전략이 오버라이드해서 현재 지표값
+        (EMA, RSI, Supertrend 상태 등) 을 포함시킬 수 있다.
+        기본은 전략 이름과 워밍업 진행도만.
+        """
+        need = self.warmup_bars()
+        have = len(history)
+        if have < need:
+            return f"{self.name} 워밍업 {have}/{need}봉"
+        return f"{self.name} 대기 중 (조건 미달)"
+
     # ---------- 상태 영속화 훅 ----------
     def get_state(self) -> dict:
         """영속화할 내부 상태 반환. 구체 전략이 오버라이드.

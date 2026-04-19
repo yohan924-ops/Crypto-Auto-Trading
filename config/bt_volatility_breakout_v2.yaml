@@ -1,0 +1,26 @@
+# Volatility Breakout v2 — 주봉 필터 + 동적 K (일봉)
+# Gemini + Claude 합의안: 하락장 진입 차단 + 노이즈 장세 K 상향
+mode: backtest
+live_confirmed: false
+symbol: "BTC/USDT"
+timeframe: "1d"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: volatility_breakout_v2
+  params:
+    use_dynamic_k: true
+    k_min: 0.3              # 추세 좋을 때 민감
+    k_max: 0.8              # 노이즈 많을 때 둔감
+    noise_period: 5         # 최근 5일 평균 노이즈로 K 결정
+    use_macro_filter: true
+    macro_ma_period: 35     # 1d × 35 = 5주 MA (주봉 5MA 근사)
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.05       # 일봉 + 익일 청산이라 손절 짧게
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.04
+  trailing_activate_pct: 0.06
+notifiers: [console]

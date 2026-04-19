@@ -1,0 +1,84 @@
+# Swing Pullback v2 멀티 자산 백테스트 (BTC + ETH + SOL)
+#
+# Gemini 합의: XRP 는 뉴스 트레이딩 휩쏘가 많아 제외. 시총·유동성 상위 메이저 3종.
+# 각 자산 독립 진입/청산. 3종 병행 시 예상 매매 빈도 연 18~24회 (단일 BTC 대비 3~4배).
+#
+# weight 설계: max_position_pct=0.30 × weight=0.33 = 자산당 실제 노출 10%.
+# 3종 동시 진입 시 총 30% (기존 단일 BTC 와 동일 총 노출).
+mode: backtest
+live_confirmed: false
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+
+portfolio:
+  - symbol: "BTC/USDT"
+    strategy:
+      name: swing_pullback
+      params:
+        macro_ema_period: 300
+        st_period: 10
+        st_multiplier: 3.0
+        rsi_period: 14
+        rsi_pullback_low: 40.0
+        rsi_pullback_high: 45.0
+        rsi_overbought: 70.0
+        macd_fast: 12
+        macd_slow: 26
+        macd_signal: 9
+        require_volume: true
+        vol_period: 20
+        vol_mult: 1.0
+    weight: 1.0
+
+  - symbol: "ETH/USDT"
+    strategy:
+      name: swing_pullback
+      params:
+        macro_ema_period: 300
+        st_period: 10
+        st_multiplier: 3.0
+        rsi_period: 14
+        rsi_pullback_low: 40.0
+        rsi_pullback_high: 45.0
+        rsi_overbought: 70.0
+        macd_fast: 12
+        macd_slow: 26
+        macd_signal: 9
+        require_volume: true
+        vol_period: 20
+        vol_mult: 1.0
+    weight: 1.0
+
+  - symbol: "SOL/USDT"
+    strategy:
+      name: swing_pullback
+      params:
+        macro_ema_period: 300
+        st_period: 10
+        st_multiplier: 3.0
+        rsi_period: 14
+        rsi_pullback_low: 40.0
+        rsi_pullback_high: 45.0
+        rsi_overbought: 70.0
+        macd_fast: 12
+        macd_slow: 26
+        macd_signal: 9
+        require_volume: true
+        vol_period: 20
+        vol_mult: 1.0
+    weight: 1.0
+
+# 주의: portfolio 모드는 최상단 symbol/timeframe 을 사용하지 않지만
+# 백테스터는 공통 타임프레임을 요구할 수 있으므로 4h 로 지정.
+symbol: "BTC/USDT"
+timeframe: "4h"
+
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+notifiers: [console]

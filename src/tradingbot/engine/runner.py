@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pandas as pd
 from loguru import logger
@@ -42,6 +42,8 @@ class Runner:
         bar_stream: Iterator[Bar],
         notifiers: list[Notifier] | None = None,
         dry_run: bool = False,
+        heartbeat_enabled: bool = False,
+        heartbeat_hours_utc: list[int] | None = None,
     ) -> None:
         self.symbol = symbol
         self.strategy = strategy
@@ -52,6 +54,10 @@ class Runner:
         self.notifiers = notifiers or []
         self.dry_run = dry_run
         self._daily: _DailyStats | None = None
+        self.heartbeat_enabled = heartbeat_enabled
+        self.heartbeat_hours_utc = sorted(set(heartbeat_hours_utc or [0, 12]))
+        # 마지막으로 heartbeat 를 발송한 (date, hour) 기록. 같은 시간 중복 발송 방지.
+        self._last_heartbeat_key: tuple[date, int] | None = None
 
     def run(self) -> None:
         self.strategy.on_start()
@@ -74,6 +80,7 @@ class Runner:
                 self._handle_day_rollover(outcome)
                 self._handle_outcome(outcome)
                 self._log_bar(outcome)
+                self._maybe_send_heartbeat(history, outcome)
                 # 매 봉 처리가 끝날 때마다 전략 내부 상태(예: _ready 플래그) 영속화
                 self.strategy.save_state()
         finally:
@@ -171,6 +178,48 @@ class Runner:
                 }
             )
             self._notify(NotifyEvent.ORDER_REJECTED, outcome.rejected_reason)
+
+    # ----- Heartbeat (정기 상태 보고) -----
+    def _maybe_send_heartbeat(self, history: pd.DataFrame, outcome: BarOutcome) -> None:
+        """현재 시각이 지정된 heartbeat UTC 시각을 넘겼으면 1회 상태 보고.
+
+        - 실제 '지금' 시각 (datetime.now(UTC)) 기준으로 판단. 백테스트에서는
+          heartbeat_enabled 가 False 로 주입되므로 영향 없음.
+        - (date, hour) 키로 중복 방지.
+        """
+        if not self.heartbeat_enabled or not self.heartbeat_hours_utc:
+            return
+        now = datetime.now(UTC)
+        current_hour = now.hour
+        if current_hour not in self.heartbeat_hours_utc:
+            return
+        key = (now.date(), current_hour)
+        if self._last_heartbeat_key == key:
+            return
+        self._last_heartbeat_key = key
+
+        try:
+            strategy_status = self.strategy.status_snapshot(history)
+        except Exception as exc:  # noqa: BLE001
+            strategy_status = f"상태 스냅샷 실패: {type(exc).__name__}"
+
+        pos = self.portfolio.get_position(self.symbol)
+        pos_line = (
+            f"{pos.amount:.6f} @ 평단 {pos.avg_price:.2f}"
+            if pos.amount > 0
+            else "0 (현금 100%)"
+        )
+        daily_pnl = self.risk.daily_pnl_pct(outcome.equity_after)
+        halt_tag = " [HALTED]" if self.risk.halted else ""
+
+        message = (
+            f"{now.strftime('%Y-%m-%d %H:%M UTC')} | "
+            f"자산 {outcome.equity_after:,.2f} | "
+            f"일손익 {daily_pnl:+.2f}%{halt_tag} | "
+            f"포지션 {pos_line}\n"
+            f"{strategy_status}"
+        )
+        self._notify(NotifyEvent.HEARTBEAT, message)
 
     # ----- 바 한 줄 요약 -----
     def _log_bar(self, outcome: BarOutcome) -> None:

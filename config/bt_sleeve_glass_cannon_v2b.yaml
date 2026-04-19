@@ -1,0 +1,76 @@
+# Sleeve 기반 백테스트 — "글래스 캐논" 수익률 극대화 구성 (2026-04-19 확정)
+#
+# Gemini + Claude 합의 아키텍처:
+#   - 3자산 각자 독립 자본 (공용 풀 없음)
+#   - 전원 Bollinger Breakout 3.0 (단일 전략 의존)
+#   - ATR × 2 동적 손절 (변동성 정규화)
+#   - 계좌 전체 일일 -10% 서킷브레이커 (단일 방어막)
+#   - 필터 전폐기 (Squeeze/ADX/Regime Switcher 없음)
+#
+# 8구간 백테스트 기대 수익: 단순 가중 +40.49% / 4년
+# 실제 Sleeve 복리 결과는 이 백테스트로 측정
+
+mode: backtest
+live_confirmed: false
+starting_cash: 10000.0
+timeframe: "4h"
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+
+# 계좌 전체 일일 손실 서킷브레이커 (-10% 도달 시 모든 Sleeve halt)
+sleeve_max_daily_loss_pct: 0.10
+
+sleeves:
+  - name: BTC
+    symbol: "BTC/USDT"
+    allocation_pct: 0.30
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08        # ATR off 시 fallback
+      max_daily_loss_pct: 1.0    # Sleeve 개별 CB 사실상 비활성 (orchestrator 전담)
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: true
+      atr_multiplier: 2.0
+
+  - name: ETH
+    symbol: "ETH/USDT"
+    allocation_pct: 0.10
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08
+      max_daily_loss_pct: 1.0
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: true
+      atr_multiplier: 2.0
+
+  - name: SOL
+    symbol: "SOL/USDT"
+    allocation_pct: 0.60
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08          # v2b: 고정 8% 손절 (Gemini B 옵션)
+      max_daily_loss_pct: 1.0
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: false          # v2b: SOL 만 ATR off
+      atr_multiplier: 2.0
+
+notifiers: [console]

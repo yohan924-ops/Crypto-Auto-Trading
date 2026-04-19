@@ -1,0 +1,24 @@
+# ETH 단독 rsi_reversal_v2 (Gemini 제안 - ETH 박스권 역추세 최적)
+# oversold=25 (기본 30 → 25, 제미나이 힌트 "RSI 과매도 25 이하")
+mode: backtest
+live_confirmed: false
+symbol: "ETH/USDT"
+timeframe: "4h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: rsi_reversal_v2
+  params:
+    period: 14
+    oversold: 25.0          # 30 → 25 (휩쏘 거르기)
+    overbought: 70.0
+    ema_period: 200         # 장기 추세 필터
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+notifiers: [console]

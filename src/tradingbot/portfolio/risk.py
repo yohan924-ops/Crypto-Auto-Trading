@@ -30,6 +30,13 @@ class RiskManager:
     max_daily_loss_pct: float = 0.05
     trailing_stop_pct: float = 0.0  # 0 = 비활성
     trailing_activate_pct: float = 0.05
+    # ATR 기반 동적 손절. True 면 check_stop_loss 에 전달된 atr 값으로
+    # stop_pct 를 재계산한다 (변동성 정규화 목적).
+    # 공식: effective_stop_pct = atr * atr_multiplier / avg_price
+    # 크립토처럼 변동성이 10%~50% 로 크게 움직이는 시장에서 고정 손절이
+    # 부적절할 때 사용. 활성 시 기존 stop_loss_pct 는 무시된다.
+    use_atr_stop: bool = False
+    atr_multiplier: float = 2.0
     state_path: Path | None = None  # 지정 시 halt/일일 자산을 이 파일에 영속화
 
     # 내부 상태 (일자별 리셋)
@@ -123,11 +130,14 @@ class RiskManager:
         current_price: float,
         low_price: float | None = None,
         symbol: str | None = None,
+        atr: float | None = None,
     ) -> bool:
         """손절 또는 트레일링 스탑 트리거 여부.
 
         세 가지 축을 함께 검사한다 — 하나라도 해당되면 True:
-          1) 평균진입가 기준 손절: (current|low) / avg - 1 <= -stop_loss_pct
+          1) 평균진입가 기준 손절: (current|low) / avg - 1 <= -effective_stop_pct
+             - use_atr_stop=False: effective_stop_pct = stop_loss_pct (고정)
+             - use_atr_stop=True + atr 전달됨: effective_stop_pct = atr*atr_mult/avg
           2) 트레일링 스탑: 피크까지 trailing_activate_pct 이상 상승했던 포지션이
              피크 대비 trailing_stop_pct 이상 하락한 경우
         low_price 가 주어지면 봉 내 저가도 "가장 불리한 가격" 으로 반영.
@@ -138,9 +148,13 @@ class RiskManager:
         if low_price is not None and low_price > 0:
             worst = min(worst, low_price)
 
-        # 1) 고정 손절
+        # 1) 고정 손절 — ATR 기반 동적 or 고정 %
+        if self.use_atr_stop and atr is not None and atr > 0:
+            effective_stop_pct = (atr * self.atr_multiplier) / position.avg_price
+        else:
+            effective_stop_pct = self.stop_loss_pct
         avg_pnl = (worst - position.avg_price) / position.avg_price
-        if avg_pnl <= -self.stop_loss_pct:
+        if avg_pnl <= -effective_stop_pct:
             return True
 
         # 2) 트레일링 — activate 임계 통과한 경우에만

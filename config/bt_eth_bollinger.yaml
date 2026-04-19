@@ -1,0 +1,22 @@
+# ETH 단독 bollinger_breakout (Gemini 2순위 - 응축 후 뉴스 돌파)
+# num_std=2.5 (기본 2.0 → 2.5, 제미나이 힌트 "표준편차 승수 2.5~3.0 빡빡하게")
+mode: backtest
+live_confirmed: false
+symbol: "ETH/USDT"
+timeframe: "4h"
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+strategy:
+  name: bollinger_breakout
+  params:
+    period: 20
+    num_std: 2.5            # 2.0 → 2.5 (휩쏘 방어)
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+notifiers: [console]

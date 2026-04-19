@@ -21,12 +21,14 @@ def _register_strategies() -> None:
         bollinger_breakout,  # noqa: F401
         buy_and_hold,  # noqa: F401
         ma_crossover,  # noqa: F401
+        mean_reversion,  # noqa: F401
         pullback,  # noqa: F401
         rsi_reversal,  # noqa: F401
         rsi_reversal_v2,  # noqa: F401
         swing_pullback,  # noqa: F401
         triple_screen,  # noqa: F401
         volatility_breakout,  # noqa: F401
+        volatility_breakout_v2,  # noqa: F401
     )
 
 
@@ -177,6 +179,8 @@ def paper(
         bar_stream=feed.stream_bars(),
         notifiers=notifiers,
         dry_run=dry_run,
+        heartbeat_enabled=settings.heartbeat.enabled,
+        heartbeat_hours_utc=settings.heartbeat.hours_utc,
     )
     runner.run()
 
@@ -203,6 +207,7 @@ def backtest(
     ),
 ) -> None:
     """백테스트 모드 (과거 OHLCV 데이터로 전략 시뮬레이션)."""
+    import pandas as pd
     from loguru import logger
 
     from tradingbot.config import load_settings
@@ -232,9 +237,91 @@ def backtest(
         max_daily_loss_pct=settings.risk.max_daily_loss_pct,
         trailing_stop_pct=settings.risk.trailing_stop_pct,
         trailing_activate_pct=settings.risk.trailing_activate_pct,
+        use_atr_stop=settings.risk.use_atr_stop,
+        atr_multiplier=settings.risk.atr_multiplier,
     )
 
-    # 멀티 자산 포트폴리오 모드 감지
+    # Sleeve 기반 모드 감지 (최우선)
+    if settings.sleeves:
+        from tradingbot.engine.sleeve import SleeveSpec, build_sleeves
+        from tradingbot.engine.sleeve_backtester import (
+            SleeveBacktester,
+            SleeveItem,
+        )
+
+        logger.info(
+            "Sleeve 백테스트: {n}개 sleeve {tf} {start}~{end}",
+            n=len(settings.sleeves),
+            tf=settings.timeframe,
+            start=start_dt.date(),
+            end=end_dt.date(),
+        )
+
+        specs: list[SleeveSpec] = []
+        dfs: dict[str, pd.DataFrame] = {}
+        for sv in settings.sleeves:
+            df_sym = fetch_historical(
+                exchange=exchange,
+                symbol=sv.symbol,
+                timeframe=settings.timeframe,
+                start=start_dt,
+                end=end_dt,
+            )
+            if df_sym.empty:
+                typer.echo(f"{sv.symbol} 과거 데이터 없음. 스킵.")
+                continue
+            dfs[sv.symbol] = df_sym
+            strat_cls = get_strategy(sv.strategy.name)
+            strat = strat_cls(
+                params=sv.strategy.params,
+                symbol=sv.symbol,
+                timeframe=settings.timeframe,
+            )
+            sleeve_risk = RiskManager(
+                max_position_pct=sv.risk.max_position_pct,
+                stop_loss_pct=sv.risk.stop_loss_pct,
+                max_daily_loss_pct=sv.risk.max_daily_loss_pct,
+                trailing_stop_pct=sv.risk.trailing_stop_pct,
+                trailing_activate_pct=sv.risk.trailing_activate_pct,
+                use_atr_stop=sv.risk.use_atr_stop,
+                atr_multiplier=sv.risk.atr_multiplier,
+            )
+            specs.append(
+                SleeveSpec(
+                    name=sv.name,
+                    symbol=sv.symbol,
+                    strategy=strat,
+                    allocation_pct=sv.allocation_pct,
+                    risk=sleeve_risk,
+                )
+            )
+
+        if not specs:
+            typer.echo("유효한 Sleeve 가 없습니다.")
+            raise typer.Exit(code=1)
+
+        sleeves = build_sleeves(
+            specs=specs,
+            starting_cash=settings.starting_cash,
+            fee_bps=settings.fee_bps,
+            slippage_bps=settings.slippage_bps,
+        )
+        items = [SleeveItem(sleeve=s, df=dfs[s.symbol]) for s in sleeves]
+        sbt = SleeveBacktester(
+            items=items,
+            timeframe=settings.timeframe,
+            starting_cash=settings.starting_cash,
+            max_daily_loss_pct=settings.sleeve_max_daily_loss_pct,
+        )
+        result = sbt.run()
+        typer.echo(result.summary())
+        if save_curve is not None:
+            save_curve.parent.mkdir(parents=True, exist_ok=True)
+            result.equity_curve.to_csv(save_curve, index=False)
+            typer.echo(f"에쿼티 커브 저장: {save_curve}")
+        return
+
+    # 멀티 자산 포트폴리오 모드 감지 (공용 풀 방식, legacy)
     if settings.portfolio:
         from tradingbot.engine.multi_backtester import (
             MultiAssetBacktester,
@@ -500,6 +587,8 @@ def live(
         risk=risk,
         bar_stream=feed.stream_bars(),
         notifiers=notifiers,
+        heartbeat_enabled=settings.heartbeat.enabled,
+        heartbeat_hours_utc=settings.heartbeat.hours_utc,
     )
     runner.run()
 

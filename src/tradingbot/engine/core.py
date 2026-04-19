@@ -130,7 +130,18 @@ def process_bar(
     # 3) 손절/트레일링 체크 (포지션 있을 때만). 봉 내 저가 터치 포함.
     position = portfolio.get_position(symbol)
     risk.update_peak(symbol, bar.high, position.amount)
-    if risk.check_stop_loss(position, bar.close, low_price=bar.low, symbol=symbol):
+    # ATR 기반 동적 손절 활성 시 ATR 값 계산 (14 기간).
+    # 최소 15 봉 이상 있어야 ATR 유효. 그 미만이면 None → 고정 stop_loss_pct 사용.
+    current_atr: float | None = None
+    if risk.use_atr_stop and len(history) >= 15:
+        from tradingbot.utils.indicators import atr as _atr_indicator
+        atr_series = _atr_indicator(history["high"], history["low"], history["close"], 14)
+        atr_last = atr_series.iloc[-1]
+        if not pd.isna(atr_last) and atr_last > 0:
+            current_atr = float(atr_last)
+    if risk.check_stop_loss(
+        position, bar.close, low_price=bar.low, symbol=symbol, atr=current_atr
+    ):
         forced_signal = Signal(
             type=SignalType.SELL,
             symbol=symbol,

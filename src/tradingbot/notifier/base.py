@@ -18,6 +18,10 @@ class NotifyEvent(StrEnum):
     CIRCUIT_BREAKER = "circuit_breaker"
     ERROR = "error"
     DAILY_REPORT = "daily_report"
+    # Heartbeat: 봇이 살아있고 조건이 안 맞아서 대기 중이라는 정기 상태 보고.
+    # 스윙 전략은 매매 빈도가 낮아 며칠간 아무 이벤트가 없을 수 있는데,
+    # 이때 사용자가 "봇이 죽었나" 불안해하지 않도록 주기적으로 상태를 보낸다.
+    HEARTBEAT = "heartbeat"
 
 
 class Notifier(ABC):

@@ -1,0 +1,57 @@
+# Swing Pullback v2 멀티 자산 — ETH 엣지 이식 실패로 제외, BTC + SOL 2종
+mode: backtest
+live_confirmed: false
+starting_cash: 10000.0
+fee_bps: 10.0
+slippage_bps: 5.0
+exchange: {id: binance, sandbox: false}
+
+portfolio:
+  - symbol: "BTC/USDT"
+    strategy:
+      name: swing_pullback
+      params:
+        macro_ema_period: 300
+        st_period: 10
+        st_multiplier: 3.0
+        rsi_period: 14
+        rsi_pullback_low: 40.0
+        rsi_pullback_high: 45.0
+        rsi_overbought: 70.0
+        macd_fast: 12
+        macd_slow: 26
+        macd_signal: 9
+        require_volume: true
+        vol_period: 20
+        vol_mult: 1.0
+    weight: 1.0
+
+  - symbol: "SOL/USDT"
+    strategy:
+      name: swing_pullback
+      params:
+        macro_ema_period: 300
+        st_period: 10
+        st_multiplier: 3.0
+        rsi_period: 14
+        rsi_pullback_low: 40.0
+        rsi_pullback_high: 45.0
+        rsi_overbought: 70.0
+        macd_fast: 12
+        macd_slow: 26
+        macd_signal: 9
+        require_volume: true
+        vol_period: 20
+        vol_mult: 1.0
+    weight: 1.0
+
+symbol: "BTC/USDT"
+timeframe: "4h"
+
+risk:
+  max_position_pct: 0.30
+  stop_loss_pct: 0.08
+  max_daily_loss_pct: 0.10
+  trailing_stop_pct: 0.05
+  trailing_activate_pct: 0.10
+notifiers: [console]
