@@ -32,6 +32,126 @@ def _register_strategies() -> None:
     )
 
 
+def _run_sleeve_paper(settings, max_bars: int, dry_run: bool) -> None:
+    """Sleeve 기반 멀티 자산 페이퍼 트레이딩 실행.
+
+    ``settings.sleeves`` 가 정의된 YAML 에서만 호출됨. 각 sleeve 는 독립 자본·
+    독립 RiskManager·독립 Strategy 를 갖고, SleeveOrchestrator 가 전체 계좌
+    일일 서킷브레이커를 관리.
+    """
+    from loguru import logger
+
+    from tradingbot.data.multi_feed import MultiSymbolFeed
+    from tradingbot.engine.sleeve import (
+        SleeveOrchestrator,
+        SleeveSpec,
+        build_sleeves,
+    )
+    from tradingbot.engine.sleeve_runner import SleeveRunner
+    from tradingbot.exchange.ccxt_adapter import CCXTAdapter
+    from tradingbot.logging_setup import setup_logging
+    from tradingbot.notifier import build_notifiers
+    from tradingbot.portfolio.risk import RiskManager
+    from tradingbot.strategies.registry import get as get_strategy
+
+    setup_logging()
+
+    logger.info(
+        "Sleeve 페이퍼 모드 시작: {n}개 sleeve {tf}",
+        n=len(settings.sleeves),
+        tf=settings.timeframe,
+    )
+
+    # paper 모드는 PaperBroker 사용 → 주문 API 불필요. 키 비워 AuthenticationError 방지
+    exchange = CCXTAdapter(
+        exchange_id=settings.exchange.id,
+        api_key=None,
+        api_secret=None,
+        sandbox=settings.exchange.sandbox,
+    )
+
+    # Mainnet backfill (Testnet sandbox 일 때만 활성)
+    backfill_exchange = None
+    if settings.exchange.sandbox:
+        try:
+            backfill_exchange = CCXTAdapter(
+                exchange_id=settings.exchange.id,
+                api_key=None,
+                api_secret=None,
+                sandbox=False,
+            )
+            logger.info("backfill_exchange 활성 (mainnet public)")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("backfill_exchange 생성 실패: {}", exc)
+
+    # SleeveSpec 구성
+    specs = []
+    max_warmup = 0
+    for sv in settings.sleeves:
+        strat_cls = get_strategy(sv.strategy.name)
+        state_path = Path(f"logs/strategy_state_sleeve_{sv.name.lower()}.json")
+        strat = strat_cls(
+            params=sv.strategy.params,
+            symbol=sv.symbol,
+            timeframe=settings.timeframe,
+            state_path=state_path,
+        )
+        max_warmup = max(max_warmup, strat.warmup_bars())
+        risk = RiskManager(
+            max_position_pct=sv.risk.max_position_pct,
+            stop_loss_pct=sv.risk.stop_loss_pct,
+            max_daily_loss_pct=sv.risk.max_daily_loss_pct,
+            trailing_stop_pct=sv.risk.trailing_stop_pct,
+            trailing_activate_pct=sv.risk.trailing_activate_pct,
+            use_atr_stop=sv.risk.use_atr_stop,
+            atr_multiplier=sv.risk.atr_multiplier,
+            state_path=Path(f"logs/risk_state_sleeve_{sv.name.lower()}.json"),
+        )
+        specs.append(
+            SleeveSpec(
+                name=sv.name,
+                symbol=sv.symbol,
+                strategy=strat,
+                allocation_pct=sv.allocation_pct,
+                risk=risk,
+            )
+        )
+
+    sleeves = build_sleeves(
+        specs=specs,
+        starting_cash=settings.starting_cash,
+        fee_bps=settings.fee_bps,
+        slippage_bps=settings.slippage_bps,
+    )
+    orchestrator = SleeveOrchestrator(
+        sleeves=sleeves,
+        max_daily_loss_pct=settings.sleeve_max_daily_loss_pct,
+    )
+
+    feed = MultiSymbolFeed(
+        exchange=exchange,
+        symbols=[s.symbol for s in sleeves],
+        timeframe=settings.timeframe,
+        warmup_bars=max(max_warmup, 50),
+        backfill_exchange=backfill_exchange,
+        max_bars=max_bars if max_bars > 0 else None,
+    )
+    notifiers = build_notifiers(
+        settings.notifiers,
+        telegram_token=settings.telegram_bot_token,
+        telegram_chat_id=settings.telegram_chat_id,
+    )
+
+    runner = SleeveRunner(
+        orchestrator=orchestrator,
+        bar_stream=feed.stream(),
+        notifiers=notifiers,
+        heartbeat_enabled=settings.heartbeat.enabled,
+        heartbeat_hours_utc=settings.heartbeat.hours_utc,
+    )
+    runner.run()
+
+
 def _parse_date(value: str) -> datetime:
     """YYYY-MM-DD 또는 ISO8601 문자열을 UTC datetime 으로 변환."""
     for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
@@ -83,6 +203,11 @@ def paper(
     _register_strategies()
     setup_logging()
     settings = load_settings(config)
+
+    # Sleeve 기반 멀티 자산 페이퍼 모드 분기 (최우선)
+    if settings.sleeves:
+        _run_sleeve_paper(settings, max_bars, dry_run)
+        return
 
     logger.info("페이퍼 모드 시작: {s} {tf}", s=settings.symbol, tf=settings.timeframe)
 

@@ -1,0 +1,81 @@
+# Sleeve 기반 3자산 페이퍼 트레이딩 설정 (Phase C-8 최종 확정 아키텍처)
+#
+# IS 백테스트 +34.97% / 4년, OOS +26.64% / 17개월 검증됨.
+# 24/7 Oracle Cloud VM 배포 대상.
+#
+# mode 는 paper: 실시간 Binance Mainnet 시세 + PaperBroker 내부 주문 시뮬.
+
+mode: paper
+live_confirmed: false
+starting_cash: 10000.0
+timeframe: "4h"
+fee_bps: 10.0
+slippage_bps: 5.0
+
+exchange:
+  id: binance
+  sandbox: false         # Mainnet 시세 사용 (Testnet 4h 과거 데이터 부족)
+
+# 계좌 전체 일일 손실 서킷브레이커 (-10% 도달 시 모든 Sleeve halt)
+sleeve_max_daily_loss_pct: 0.10
+
+sleeves:
+  - name: BTC
+    symbol: "BTC/USDT"
+    allocation_pct: 0.30
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08            # ATR off fallback
+      max_daily_loss_pct: 1.0        # Sleeve 개별 CB 비활성 (orchestrator 전담)
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: true
+      atr_multiplier: 2.0            # BTC 변동성 정규화
+
+  - name: ETH
+    symbol: "ETH/USDT"
+    allocation_pct: 0.30
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08
+      max_daily_loss_pct: 1.0
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: true
+      atr_multiplier: 2.0            # ETH 변동성 정규화
+
+  - name: SOL
+    symbol: "SOL/USDT"
+    allocation_pct: 0.40
+    strategy:
+      name: bollinger_breakout
+      params:
+        period: 20
+        num_std: 3.0
+    risk:
+      max_position_pct: 0.30
+      stop_loss_pct: 0.08            # 하이베타 하드 스탑 (ATR 비활성)
+      max_daily_loss_pct: 1.0
+      trailing_stop_pct: 0.05
+      trailing_activate_pct: 0.10
+      use_atr_stop: false            # SOL 만 고정 8% (Gemini 모멘텀 정석)
+      atr_multiplier: 2.0
+
+# Heartbeat: 매매 이벤트 없을 때 계좌 살아있음 확인용 정기 상태 보고
+heartbeat:
+  enabled: true
+  hours_utc: [0, 12]                 # KST 09:00, 21:00 — 하루 2회
+
+notifiers:
+  - console
+  - telegram
