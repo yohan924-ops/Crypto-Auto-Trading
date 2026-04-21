@@ -44,6 +44,7 @@ class Sleeve:
     risk: RiskManager
     broker: Broker
     allocation_pct: float  # 0.0 ~ 1.0, 전체 자본 중 배분 비율 (기록 목적)
+    initial_cash: float = 0.0  # 수익률 계산용 시작 자본 (build_sleeves 에서 설정)
     history: pd.DataFrame = field(
         default_factory=lambda: pd.DataFrame(columns=HISTORY_COLUMNS)
     )
@@ -227,6 +228,7 @@ def build_sleeves(
                 risk=spec.risk,
                 broker=broker,
                 allocation_pct=spec.allocation_pct,
+                initial_cash=sleeve_cash,
             )
         )
     return sleeves

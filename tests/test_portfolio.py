@@ -42,7 +42,8 @@ def test_buy_fill_reduces_cash_and_adds_position():
     assert p.cash == pytest.approx(899.0)
     pos = p.get_position("BTC/USDT")
     assert pos.amount == pytest.approx(2.0)
-    assert pos.avg_price == pytest.approx(50.0)
+    # 평단가 = (2*50 + 1) / 2 = 50.5 (수수료 포함 실효 본전가, 2026-04-21~)
+    assert pos.avg_price == pytest.approx(50.5)
 
 
 def test_sell_fill_increases_cash_and_reduces_position():

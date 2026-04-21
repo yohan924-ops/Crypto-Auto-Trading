@@ -33,6 +33,37 @@ from tradingbot.strategies.base import Bar, SignalType
 from .core import BarOutcome
 from .sleeve import Sleeve, SleeveOrchestrator
 
+# ---------- 통화 표시 헬퍼 ----------
+
+_CURRENCY_SYMBOLS = {
+    "USDT": "$",
+    "USDC": "$",
+    "USD": "$",
+    "KRW": "₩",
+    "EUR": "€",
+    "JPY": "¥",
+}
+
+
+def _currency_symbol(symbol: str) -> str:
+    """'BTC/USDT' → '$', 'BTC/KRW' → '₩'. 미지 quote 는 '<code> '."""
+    quote = symbol.split("/")[-1] if "/" in symbol else symbol
+    return _CURRENCY_SYMBOLS.get(quote, quote + " ")
+
+
+def _fmt_money(value: float, symbol: str) -> str:
+    """통화 기호 + 천단위 콤마 포맷. KRW 는 소수점 없음."""
+    sym = _currency_symbol(symbol)
+    quote = symbol.split("/")[-1] if "/" in symbol else symbol
+    if quote == "KRW":
+        return f"{sym}{value:,.0f}"
+    return f"{sym}{value:,.2f}"
+
+
+def _fmt_pct(value: float) -> str:
+    """+/- 붙은 퍼센트 포맷."""
+    return f"{value:+.2f}%"
+
 
 @dataclass
 class _DailyStats:
@@ -122,11 +153,12 @@ class SleeveRunner:
         if signal is not None:
             log_order_event({"event": "signal", "sleeve": sleeve.name, **asdict(signal)})
             if signal.type != SignalType.HOLD:
+                action = "매수" if signal.type == SignalType.BUY else "매도"
                 self._notify(
                     NotifyEvent.SIGNAL,
-                    f"[{sleeve.name}] {signal.type.value.upper()} "
-                    f"{signal.symbol} @ {signal.price:.2f} — "
-                    f"{signal.reason or ''}".strip(),
+                    f"🎯 {action} 신호\n"
+                    f"{sleeve.name} {_fmt_money(signal.price, sleeve.symbol)}\n"
+                    f"사유: {signal.reason or '-'}",
                 )
 
         if outcome.order is not None:
@@ -135,20 +167,27 @@ class SleeveRunner:
             )
 
         if outcome.stop_loss_triggered:
+            # 손실률 계산: (현재가 - 평단가) / 평단가
+            pos = sleeve.portfolio.get_position(sleeve.symbol)
+            loss_pct = 0.0
+            if pos.avg_price > 0:
+                loss_pct = (outcome.bar.close - pos.avg_price) / pos.avg_price * 100
             self._notify(
                 NotifyEvent.STOP_LOSS,
-                f"[{sleeve.name}] 손절 발동 {sleeve.symbol} @ {outcome.bar.close:.2f}",
+                f"🛑 손절 발동\n"
+                f"{sleeve.name} {_fmt_money(outcome.bar.close, sleeve.symbol)} "
+                f"({_fmt_pct(loss_pct)})",
             )
 
         if outcome.circuit_breaker_triggered:
             self._notify(
                 NotifyEvent.CIRCUIT_BREAKER,
-                f"[{sleeve.name}] 개별 sleeve halt — 신규 진입 차단",
+                f"🚨 {sleeve.name} 개별 중지\n신규 진입 차단",
             )
         if self.orchestrator.halted:
             self._notify(
                 NotifyEvent.CIRCUIT_BREAKER,
-                "계좌 전체 서킷브레이커 — 모든 sleeve halt",
+                "🚨 계좌 전체 서킷브레이커 발동\n일일 손실 한도 도달 — 모든 매매 중단",
             )
 
         if outcome.fill is not None:
@@ -157,12 +196,28 @@ class SleeveRunner:
             )
             if self._daily is not None:
                 self._daily.num_fills += 1
-            self._notify(
-                NotifyEvent.ORDER_FILLED,
-                f"[{sleeve.name}] {outcome.fill.side.value.upper()} "
-                f"{outcome.fill.amount:.6f} {outcome.fill.symbol} "
-                f"@ {outcome.fill.price:.2f} (fee {outcome.fill.fee:.4f})",
-            )
+
+            fill = outcome.fill
+            pos = sleeve.portfolio.get_position(sleeve.symbol)
+            action = "매수" if fill.side.value == "buy" else "매도"
+            notional = fill.amount * fill.price
+
+            lines = [
+                f"✅ {action} 체결",
+                f"{sleeve.name} {fill.amount:.6f}개 "
+                f"@ {_fmt_money(fill.price, sleeve.symbol)}",
+                f"거래금: {_fmt_money(notional, sleeve.symbol)} "
+                f"(수수료 {_fmt_money(fill.fee, sleeve.symbol)})",
+            ]
+            # 체결 후 평단가 (수수료 포함) 표시
+            if pos.amount > 0 and pos.avg_price > 0:
+                lines.append(
+                    f"보유: {pos.amount:.6f}개 · 평단가 "
+                    f"{_fmt_money(pos.avg_price, sleeve.symbol)}"
+                )
+            else:
+                lines.append(f"현금: {_fmt_money(sleeve.cash(), sleeve.symbol)}")
+            self._notify(NotifyEvent.ORDER_FILLED, "\n".join(lines))
 
         if outcome.rejected_reason is not None:
             logger.exception("[{}] 주문 실패: {}", sleeve.name, outcome.rejected_reason)
@@ -175,7 +230,7 @@ class SleeveRunner:
             )
             self._notify(
                 NotifyEvent.ORDER_REJECTED,
-                f"[{sleeve.name}] {outcome.rejected_reason}",
+                f"⚠️ {sleeve.name} 주문 거부\n{outcome.rejected_reason}",
             )
 
     def _emit_daily_report(self, ts: datetime) -> None:
@@ -187,10 +242,16 @@ class SleeveRunner:
                 if prev_equity
                 else 0.0
             )
+            delta_abs = current_equity - prev_equity
+            # 대표 통화 (첫 sleeve 기준)
+            repr_symbol = self.orchestrator.sleeves[0].symbol
             self._notify(
                 NotifyEvent.DAILY_REPORT,
-                f"{self._daily.day} 일일 리포트 — 거래 {self._daily.num_fills}건, "
-                f"손익 {delta_pct:+.2f}%, 종가기준 자산 {current_equity:,.2f}",
+                f"📊 {self._daily.day} 일일 결산\n"
+                f"매매 {self._daily.num_fills}건 · "
+                f"손익 {_fmt_money(delta_abs, repr_symbol)} "
+                f"({_fmt_pct(delta_pct)})\n"
+                f"총자산 {_fmt_money(current_equity, repr_symbol)}",
             )
         self._daily = _DailyStats(
             day=ts.date(),
@@ -229,20 +290,59 @@ class SleeveRunner:
             return
         self._last_heartbeat_key = key
 
-        # 각 sleeve 의 상태 요약
-        lines = [f"{now.strftime('%Y-%m-%d %H:%M UTC')} Sleeve Heartbeat"]
-        total = self.orchestrator.total_equity(self._latest_prices)
-        halt_tag = " [HALTED]" if self.orchestrator.halted else ""
-        lines.append(f"계좌 총자산: {total:,.2f}{halt_tag}")
+        # 계좌 총자산 + 초기 자본 대비 수익률
+        total_eq = self.orchestrator.total_equity(self._latest_prices)
+        total_initial = sum(s.initial_cash for s in self.orchestrator.sleeves)
+        total_pnl_pct = (
+            (total_eq - total_initial) / total_initial * 100.0 if total_initial > 0 else 0.0
+        )
+        repr_symbol = self.orchestrator.sleeves[0].symbol
+        halt_tag = " [긴급정지]" if self.orchestrator.halted else ""
+
+        lines = [
+            f"💓 봇 상태 ({now.strftime('%m/%d %H:%M UTC')}){halt_tag}",
+            f"총자산: {_fmt_money(total_eq, repr_symbol)} "
+            f"({_fmt_pct(total_pnl_pct)})",
+            "",
+        ]
+        # 각 sleeve 상세
         for s in self.orchestrator.sleeves:
             mark = self._latest_prices.get(s.symbol, 0.0)
             eq = s.equity(mark) if mark > 0 else s.cash()
-            pos = s.position_amount()
-            pos_tag = f"{pos:.6f} @ {s.portfolio.get_position(s.symbol).avg_price:.2f}" if pos > 0 else "현금"
+            s_pnl_pct = (
+                (eq - s.initial_cash) / s.initial_cash * 100.0
+                if s.initial_cash > 0
+                else 0.0
+            )
+            pos_amount = s.position_amount()
+            pos_line = ""
+            if pos_amount > 0:
+                avg = s.portfolio.get_position(s.symbol).avg_price
+                # 현재가 대비 평단 손익
+                pos_pnl_pct = (
+                    (mark - avg) / avg * 100.0 if avg > 0 and mark > 0 else 0.0
+                )
+                pos_line = (
+                    f"  보유: {pos_amount:.6f}개 · "
+                    f"평단 {_fmt_money(avg, s.symbol)} "
+                    f"({_fmt_pct(pos_pnl_pct)})"
+                )
+            else:
+                pos_line = "  보유: 없음 (현금 대기)"
+
+            lines.append(
+                f"[{s.name}] {_fmt_money(eq, s.symbol)} ({_fmt_pct(s_pnl_pct)})"
+            )
+            if mark > 0:
+                lines.append(f"  현재가: {_fmt_money(mark, s.symbol)}")
+            lines.append(pos_line)
+
+            # 전략 간단 요약
             try:
                 strat_status = s.strategy.status_snapshot(s.history)
             except Exception as exc:  # noqa: BLE001
-                strat_status = f"status_snapshot 실패: {type(exc).__name__}"
-            lines.append(f"  [{s.name}] eq={eq:,.2f} pos={pos_tag}")
-            lines.append(f"    {strat_status}")
-        self._notify(NotifyEvent.HEARTBEAT, "\n".join(lines))
+                strat_status = f"상태 스냅샷 실패: {type(exc).__name__}"
+            lines.append(f"  상태: {strat_status}")
+            lines.append("")
+
+        self._notify(NotifyEvent.HEARTBEAT, "\n".join(lines).rstrip())

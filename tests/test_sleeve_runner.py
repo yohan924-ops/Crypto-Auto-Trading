@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from tradingbot.broker.paper import PaperBroker
 from tradingbot.engine.sleeve import Sleeve, SleeveOrchestrator
@@ -144,7 +145,11 @@ def test_runner_emits_fill_event(tmp_path, monkeypatch):
 
     fill_events = [m for ev, m in cap.events if ev == NotifyEvent.ORDER_FILLED]
     assert len(fill_events) == 1
-    assert "[BTC]" in fill_events[0]
+    # 새 메시지 포맷: "✅ 매수 체결\nBTC ...\n거래금..."
+    assert "매수 체결" in fill_events[0]
+    assert "BTC" in fill_events[0]
+    # 평단가 표시 확인 (수수료 포함 실효가)
+    assert "평단가" in fill_events[0] or "평단" in fill_events[0]
 
 
 # ---------- Heartbeat ----------
@@ -216,4 +221,114 @@ def test_runner_emits_daily_report_on_rollover(tmp_path, monkeypatch):
 
     daily_events = [m for ev, m in cap.events if ev == NotifyEvent.DAILY_REPORT]
     assert len(daily_events) >= 1
-    assert "일일 리포트" in daily_events[0]
+    # 새 포맷: "📊 YYYY-MM-DD 일일 결산"
+    assert "일일 결산" in daily_events[0]
+    assert "매매" in daily_events[0]
+    assert "총자산" in daily_events[0]
+
+
+# ---------- 통화 포맷 헬퍼 ----------
+
+
+def test_currency_symbol_usdt_is_dollar():
+    from tradingbot.engine.sleeve_runner import _currency_symbol
+
+    assert _currency_symbol("BTC/USDT") == "$"
+    assert _currency_symbol("ETH/USDC") == "$"
+    assert _currency_symbol("BTC/USD") == "$"
+
+
+def test_currency_symbol_krw_is_won():
+    from tradingbot.engine.sleeve_runner import _currency_symbol
+
+    assert _currency_symbol("BTC/KRW") == "₩"
+    assert _currency_symbol("ETH/KRW") == "₩"
+
+
+def test_currency_symbol_unknown_quote_fallback():
+    from tradingbot.engine.sleeve_runner import _currency_symbol
+
+    # 미지 quote 는 "코드 " 형태로 fallback
+    assert _currency_symbol("BTC/XYZ") == "XYZ "
+
+
+def test_fmt_money_krw_no_decimal():
+    from tradingbot.engine.sleeve_runner import _fmt_money
+
+    # KRW 는 소수점 없음
+    assert _fmt_money(1234567.89, "BTC/KRW") == "₩1,234,568"
+
+
+def test_fmt_money_usdt_two_decimals():
+    from tradingbot.engine.sleeve_runner import _fmt_money
+
+    assert _fmt_money(1234.567, "BTC/USDT") == "$1,234.57"
+
+
+def test_fmt_money_negative_value():
+    from tradingbot.engine.sleeve_runner import _fmt_money
+
+    # 손실 금액 표시
+    assert "-" in _fmt_money(-123.45, "BTC/USDT")
+
+
+# ---------- 평단가 수수료 포함 ----------
+
+
+def test_fill_message_shows_effective_avg_price_with_fee(tmp_path, monkeypatch):
+    """매수 체결 시 메시지에 수수료 포함 평단가가 표시돼야."""
+    monkeypatch.chdir(tmp_path)
+    s_btc = _make_sleeve("BTC", "BTC/USDT", 10_000.0)
+    orch = SleeveOrchestrator([s_btc])
+    cap = CaptureNotifier()
+
+    ts = datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
+    bars = [("BTC/USDT", _bar(50000.0, ts))]
+    runner = SleeveRunner(
+        orchestrator=orch, bar_stream=_build_stream(bars), notifiers=[cap]
+    )
+    runner.run()
+
+    # 포지션 평단가 확인 — 수수료 반영됐는지
+    pos = s_btc.portfolio.get_position("BTC/USDT")
+    # fill.price 는 슬리피지 5bps 포함됨. 평단은 여기에 수수료 10bps 더 더해진 실효가.
+    # PaperBroker: actual_fill_price = 50000 * 1.0005 = 50025 (slippage)
+    # fee = 50025 * amount * 0.001
+    # avg_price = 50025 * amount + fee) / amount = 50025 * 1.001 ≈ 50075
+    assert pos.avg_price > 50000.0
+    # 실효가 = slip+fee 합쳐 약 0.15% 위
+    assert pos.avg_price == pytest.approx(50000.0 * 1.0015, rel=0.001)
+
+
+# ---------- Heartbeat 상세 ----------
+
+
+def test_heartbeat_shows_pnl_percent_per_sleeve(tmp_path, monkeypatch):
+    """Heartbeat 메시지에 자산별 수익률(%) 표시."""
+    monkeypatch.chdir(tmp_path)
+    s_btc = _make_sleeve("BTC", "BTC/USDT", 10_000.0)
+    orch = SleeveOrchestrator([s_btc])
+    cap = CaptureNotifier()
+
+    ts = datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
+    bars = [("BTC/USDT", _bar(50000.0, ts))]
+    runner = SleeveRunner(
+        orchestrator=orch,
+        bar_stream=_build_stream(bars),
+        notifiers=[cap],
+        heartbeat_enabled=True,
+        heartbeat_hours_utc=[12],
+    )
+    fake_now = datetime(2026, 4, 21, 12, 0, 0, tzinfo=UTC)
+    with patch("tradingbot.engine.sleeve_runner.datetime") as mock_dt:
+        mock_dt.now.return_value = fake_now
+        runner.run()
+
+    hb = [m for ev, m in cap.events if ev == NotifyEvent.HEARTBEAT][0]
+    # 수익률 퍼센트 포맷 확인 (+0.00% 또는 -X.XX%)
+    import re
+    assert re.search(r"[+-]\d+\.\d{2}%", hb), f"수익률 % 표시 없음: {hb}"
+    assert "총자산" in hb
+    assert "BTC" in hb
+    # 보유 중이면 평단 표시, 현금 대기면 "현금 대기"
+    assert "평단" in hb or "현금 대기" in hb

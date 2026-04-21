@@ -32,7 +32,14 @@ class Portfolio:
         return self.positions.setdefault(symbol, Position(symbol=symbol))
 
     def apply_fill(self, fill: Fill) -> None:
-        """체결 이벤트를 잔고·포지션에 반영. 수수료는 현금에서 차감."""
+        """체결 이벤트를 잔고·포지션에 반영. 수수료는 현금에서 차감.
+
+        **avg_price 에 매수 수수료 포함 (2026-04-21~)**: "실효 매수가" = "본전가".
+        -  avg_price = (기존 포지션 비용 + 신규 거래금 + 신규 수수료) / 총 수량
+        - 효과: 손절 -8% 가 "실제 순수 -8% 손실" 기준으로 정확해짐.
+          기존엔 수수료 제외 평단이라 실제 -8%+수수료 = -8.2% 에 트리거됐음.
+        - SELL 시엔 avg_price 수정 안 함 (잔여 포지션의 본전가 유지).
+        """
         position = self.get_position(fill.symbol)
         notional = fill.amount * fill.price
 
@@ -40,8 +47,11 @@ class Portfolio:
             self.cash -= notional + fill.fee
             total_amount = position.amount + fill.amount
             if total_amount > 0:
+                # 수수료 포함 가중 평균 — 신규 매수분에만 fee 더함
                 position.avg_price = (
-                    position.amount * position.avg_price + fill.amount * fill.price
+                    position.amount * position.avg_price
+                    + fill.amount * fill.price
+                    + fill.fee
                 ) / total_amount
             position.amount = total_amount
         else:  # SELL
