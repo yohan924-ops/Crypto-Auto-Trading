@@ -4,11 +4,15 @@ Windows PC 에서 Oracle Cloud VM (crypto-bot) 을 메뉴 방식으로 관리.
 
 ## 전제
 
-- SSH 키 파일 경로: `C:\Users\KKH\Downloads\ssh-key-2026-04-18.key`
+- SSH 키 파일: **이 폴더(`scripts/oracle/`) 안에 `ssh-key-2026-04-18.key`** 위치
 - Oracle VM IP: `134.185.97.110`
 - OS: Windows 10/11 (기본 OpenSSH 클라이언트 포함)
 
-키 경로나 IP 바뀌면 `bot-manager.bat` 상단의 `SSH_KEY` / `SSH_HOST` 변수 수정.
+IP 바뀌면 `bot-manager.bat` 상단의 `SSH_HOST` 변수 수정.
+키 파일명 다르면 `SSH_KEY` 의 파일명 부분 수정.
+
+**보안**: `.key`, `.pem` 파일은 `.gitignore` 에 등록됨 → git 커밋 절대 안 됨.
+이 폴더 자체는 커밋되지만 키 파일만 제외되는 구조.
 
 ## 사용법
 

@@ -39,3 +39,6 @@ Thumbs.db
 # Claude Code local settings (per-user)
 .claude/
 image/
+*.key
+*.pem
+*.pub

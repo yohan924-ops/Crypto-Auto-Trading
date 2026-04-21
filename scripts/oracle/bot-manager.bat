@@ -3,7 +3,8 @@ REM Oracle Cloud VM crypto-bot 통합 관리 스크립트.
 REM 메뉴에서 번호 선택 → SSH 로 해당 작업 실행 → 메뉴로 복귀.
 
 setlocal EnableDelayedExpansion
-set SSH_KEY=C:\Users\KKH\Downloads\ssh-key-2026-04-18.key
+REM %~dp0 = 이 배치 파일이 있는 폴더. 키를 이 폴더로 옮기면 경로 하드코딩 불필요.
+set SSH_KEY=%~dp0ssh-key-2026-04-18.key
 set SSH_HOST=ubuntu@134.185.97.110
 set PROJECT_DIR=~/Crypto-Auto-Trading
 
